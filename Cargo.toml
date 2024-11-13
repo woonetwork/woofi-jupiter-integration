@@ -1,0 +1,30 @@
+[package]
+name = "woofi_jupiter"
+version = "0.1.0"
+description = "Created with Anchor"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "woofi_jupiter"
+
+[features]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+default = []
+
+[dependencies]
+anchor-lang = "0.29"
+anchor-spl = "0.29"
+spl-token = "=4.0.0"
+solana-program = "=1.17.31"
+solana-sdk = "=1.17.31"
+solana-zk-token-sdk = "=1.17.31"
+solana-account-decoder = "=1.17.31"
+jupiter-amm-interface = "=0.4.4"
+anyhow = "1.0"
+pyth-solana-receiver-sdk = "=0.3.1"
+thiserror = "=1.0.65"
+subtle = "=2.4.1"
