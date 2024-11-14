@@ -1,4 +1,4 @@
-use anchor_lang::declare_id;
+use anchor_lang::{declare_id, prelude::Account, AccountDeserialize};
 /*
 
 ░██╗░░░░░░░██╗░█████╗░░█████╗░░░░░░░███████╗██╗
@@ -31,8 +31,10 @@ use anchor_lang::declare_id;
 * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-use anyhow::Result;
+use anyhow::{anyhow, Context, Result};
+
 use constants::ONE_E5_U128;
+use errors::ErrorCode;
 use state::{woopool, WooPool, Wooracle};
 use util::{checked_mul_div_round_up, decimals, get_price, swap_math, Decimals, GetStateResult};
 use std::{cmp::max, collections::HashMap, convert::TryInto};
@@ -49,7 +51,7 @@ mod errors;
 mod state;
 mod util;
 
-declare_id!("opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb");
+declare_id!("woocYbcZkJ1ryopvtNP7Lr367wbW4WrMgxmzroe6VWU");
 
 pub struct WoofiSwap {
     key: Pubkey,
@@ -113,26 +115,26 @@ impl Amm for WoofiSwap {
     }
     
     fn update(&mut self, account_map: &AccountMap) -> Result<()> {
-        let token_a_wooracle_data = try_get_account_data(account_map, &self.token_a_wooracle)?;
-        let token_a_wooracle = Wooracle::unpack(token_a_wooracle_data)?;
+        let token_a_wooracle_data = &mut try_get_account_data(account_map, &self.token_a_wooracle)?;
+        let token_a_wooracle = & Wooracle::try_deserialize( token_a_wooracle_data)?;
 
-        let token_a_woopool_data = try_get_account_data(account_map, &self.token_a_woopool)?;
-        let token_a_woopool = WooPool::unpack(token_a_woopool_data)?;
+        let token_a_woopool_data = &mut try_get_account_data(account_map, &self.token_a_woopool)?;
+        let token_a_woopool = WooPool::try_deserialize(token_a_woopool_data)?;
 
-        let token_a_price_update_data = try_get_account_data(account_map, &self.token_a_price_update)?;
-        let token_a_price_update = PriceUpdateV2::unpack(token_a_price_update_data)?;
+        let token_a_price_update_data = &mut try_get_account_data(account_map, &self.token_a_price_update)?;
+        let token_a_price_update = &mut PriceUpdateV2::try_deserialize(token_a_price_update_data)?;
 
-        let token_b_wooracle_data = try_get_account_data(account_map, &self.token_b_wooracle)?;
-        let token_b_wooracle = Wooracle::unpack(token_b_wooracle_data)?;
+        let token_b_wooracle_data = &mut try_get_account_data(account_map, &self.token_b_wooracle)?;
+        let token_b_wooracle = & Wooracle::try_deserialize(token_b_wooracle_data)?;
 
-        let token_b_woopool_data = try_get_account_data(account_map, &self.token_b_woopool)?;
-        let token_b_woopool = WooPool::unpack(token_b_woopool_data)?;
+        let token_b_woopool_data = &mut try_get_account_data(account_map, &self.token_b_woopool)?;
+        let token_b_woopool = WooPool::try_deserialize(token_b_woopool_data)?;
     
-        let token_b_price_update_data = try_get_account_data(account_map, &self.token_b_price_update)?;
-        let token_b_price_update = PriceUpdateV2::unpack(token_b_price_update_data)?;
+        let token_b_price_update_data = &mut try_get_account_data(account_map, &self.token_b_price_update)?;
+        let token_b_price_update = &mut PriceUpdateV2::try_deserialize(token_b_price_update_data)?;
 
-        let quote_price_update_data = try_get_account_data(account_map, &self.quote_price_update)?;
-        let quote_price_update = PriceUpdateV2::unpack(quote_price_update_data)?;
+        let quote_price_update_data = &mut try_get_account_data(account_map, &self.quote_price_update)?;
+        let quote_price_update = &mut PriceUpdateV2::try_deserialize(quote_price_update_data)?;
 
         let fee_rate: u16 = if self.token_a_mint == self.quote_mint {
             token_b_woopool.fee_rate
@@ -159,10 +161,10 @@ impl Amm for WoofiSwap {
             get_price::get_state_impl(token_b_wooracle, token_b_price_update, quote_price_update)?;    
 
         self.fee_rate = fee_rate;
-        self.decimals_a = decimals_a;
+        self.decimals_a = decimals_a?;
         self.state_a = state_a;
         self.woopool_a = token_a_woopool;
-        self.decimals_b = decimals_b;
+        self.decimals_b = decimals_b?;
         self.state_b = state_b;
         self.woopool_b = token_b_woopool;
 
@@ -171,12 +173,12 @@ impl Amm for WoofiSwap {
     
     fn quote(&self, quote_params: &QuoteParams) -> Result<Quote> {
         if quote_params.swap_mode == SwapMode::ExactIn {
-            let decimals_a = &self.decimals_a;
-            let state_a = &self.state_a;
-            let woopool_a = &self.woopool_a;
-            let decimals_b = &self.decimals_b;
-            let state_b = &self.state_b;
-            let woopool_b = &self.woopool_b;
+            let mut decimals_a = &self.decimals_a;
+            let mut state_a = &self.state_a;
+            let mut woopool_a = &self.woopool_a;
+            let mut decimals_b = &self.decimals_b;
+            let mut state_b = &self.state_b;
+            let mut woopool_b = &self.woopool_b;
             if self.token_b_mint == quote_params.input_mint {
                 decimals_a = &self.decimals_b;
                 decimals_b = &self.decimals_a;
@@ -186,11 +188,11 @@ impl Amm for WoofiSwap {
                 woopool_b = &self.woopool_a;
             }
 
-            let mut quote_amount = quote_params.amount;
+            let mut quote_amount = quote_params.amount as u128;
             if quote_params.input_mint != self.quote_mint {
         
                 let (_quote_amount, _) = swap_math::calc_quote_amount_sell_base(
-                    quote_params.amount,
+                    quote_params.amount as u128,
                     woopool_a,
                     decimals_a,
                     state_a,
@@ -200,7 +202,7 @@ impl Amm for WoofiSwap {
             }
         
             let swap_fee = checked_mul_div_round_up(quote_amount, self.fee_rate as u128, ONE_E5_U128)?;
-            quote_amount = quote_amount.checked_sub(swap_fee)?;
+            quote_amount = quote_amount.checked_sub(swap_fee).ok_or(ErrorCode::MathOverflow)?;
         
             let mut to_amount = quote_amount;
             if quote_params.output_mint != self.quote_mint {
@@ -214,13 +216,23 @@ impl Amm for WoofiSwap {
             }
         
             Ok(Quote {
-                fee_pct: self.fee_rate,
-                in_amount: quote_params.input_amount.try_into()?,
-                out_amount: to_amount,
-                fee_amount: swap_fee,
+                fee_pct: self.fee_rate.into(),
+                in_amount: quote_params.amount.try_into()?,
+                out_amount: to_amount as u64,
+                fee_amount: swap_fee as u64,
                 fee_mint: self.quote_mint,
                 ..Quote::default()
             })
+        } else {
+            Ok(Quote {
+                fee_pct: self.fee_rate.into(),
+                in_amount: 0,
+                out_amount: 0,
+                fee_amount: 0,
+                fee_mint: self.quote_mint,
+                ..Quote::default()
+            })
+
         }
     }
     
@@ -229,7 +241,8 @@ impl Amm for WoofiSwap {
     }
     
     fn clone_amm(&self) -> Box<dyn Amm + Send + Sync> {
-        Box::new(self.clone())
+        //Box::new(self.clone())
+        todo!()
     }
     
 }

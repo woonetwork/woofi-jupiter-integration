@@ -1,16 +1,20 @@
-use anchor_lang::prelude::*;
+use anyhow::{anyhow, Context, Result};
+use anchor_lang::{prelude::{account, borsh, AnchorDeserialize, AnchorSerialize, InitSpace, Pubkey}, require, Accounts, Key};
 
 use crate::{constants::*, errors::ErrorCode, state::*, util::*};
 
 pub fn calc_quote_amount_sell_base(
     base_amount: u128,
-    woopool: &Account<'_, WooPool>,
+    woopool: &WooPool,
     decimals: &Decimals,
     state: &GetStateResult,
 ) -> Result<(u128, u128)> {
-    require!(state.feasible_out, ErrorCode::WooOracleNotFeasible);
-
-    require!(state.price_out > 0, ErrorCode::WooOraclePriceNotValid);
+    if !state.feasible_out {
+        return Err(ErrorCode::WooOracleNotFeasible.into());
+    }
+    if state.price_out <= 0 {
+        return Err(ErrorCode::WooOraclePriceNotValid.into());
+    }
 
     //let notionalSwap : u128 = (base_amount * state.price_out * decimals.quote_dec) / decimals.base_dec / decimals.price_dec;
     let notion_calc_a: u128 =
@@ -21,17 +25,19 @@ pub fn calc_quote_amount_sell_base(
         decimals.base_dec as u128,
     )?;
 
-    require!(
-        notional_swap <= woopool.max_notional_swap,
-        ErrorCode::WooPoolExceedMaxNotionalValue
-    );
+    if notional_swap > woopool.max_notional_swap {
+        return Err(ErrorCode::WooPoolExceedMaxNotionalValue.into());
+    }
 
     // gamma = k * price * base_amount; and decimal 18
     let gamma_calc_a: u128 =
         checked_mul_div(base_amount, state.price_out, decimals.price_dec as u128)?;
     let gamma: u128 =
         checked_mul_div(gamma_calc_a, state.coeff as u128, decimals.base_dec as u128)?;
-    require!(gamma <= woopool.max_gamma, ErrorCode::WooPoolExceedMaxGamma);
+    
+    if gamma > woopool.max_gamma {
+        return Err(ErrorCode::WooPoolExceedMaxGamma.into());
+    }
 
     // Formula: quoteAmount = baseAmount * oracle.price * (1 - oracle.k * baseAmount * oracle.price - oracle.spread)
     // quoteAmount =
@@ -73,18 +79,20 @@ pub fn calc_quote_amount_sell_base(
 
 pub fn calc_base_amount_sell_quote(
     quote_amount: u128,
-    woopool: &Account<'_, WooPool>,
+    woopool: &WooPool,
     decimals: &Decimals,
     state: &GetStateResult,
 ) -> Result<(u128, u128)> {
-    require!(state.feasible_out, ErrorCode::WooOracleNotFeasible);
+    if !state.feasible_out {
+        return Err(ErrorCode::WooOracleNotFeasible.into());
+    }
+    if state.price_out <= 0 {
+        return Err(ErrorCode::WooOraclePriceNotValid.into());
+    }
 
-    require!(state.price_out > 0, ErrorCode::WooOraclePriceNotValid);
-
-    require!(
-        quote_amount <= woopool.max_notional_swap,
-        ErrorCode::WooPoolExceedMaxNotionalValue
-    );
+    if quote_amount > woopool.max_notional_swap {
+        return Err(ErrorCode::WooPoolExceedMaxNotionalValue.into());
+    }
 
     // gamma = k * quote_amount; and decimal 18
     let gamma: u128 = checked_mul_div(
@@ -92,7 +100,10 @@ pub fn calc_base_amount_sell_quote(
         state.coeff as u128,
         decimals.quote_dec as u128,
     )?;
-    require!(gamma <= woopool.max_gamma, ErrorCode::WooPoolExceedMaxGamma);
+
+    if gamma > woopool.max_gamma {
+        return Err(ErrorCode::WooPoolExceedMaxGamma.into());
+    }
 
     // Formula: baseAmount = quoteAmount / oracle.price * (1 - oracle.k * quoteAmount - oracle.spread)
     let calc_a: u128 = quote_amount

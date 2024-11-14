@@ -1,69 +1,68 @@
 use std::num::TryFromIntError;
 
-use anchor_lang::prelude::*;
+use thiserror::Error;
 
-#[error_code]
-#[derive(PartialEq)]
+#[derive(Error, Debug)]
 pub enum ErrorCode {
-    #[msg("Unable to divide by zero")]
+    #[error("Unable to divide by zero")]
     DivideByZero, // 0x1770
-    #[msg("Unable to cast number into BigInt")]
+    #[error("Unable to cast number into BigInt")]
     NumberCastError, //  0x1771
 
-    #[msg("Exceeded max fee rate")]
+    #[error("Exceeded max fee rate")]
     FeeRateMaxExceeded, // 0x1772
-    #[msg("Mathematical operation with overflow")]
+    #[error("Mathematical operation with overflow")]
     MathOverflow, // 0x1773
-    #[msg("Muldiv overflow")]
+    #[error("Muldiv overflow")]
     MulDivOverflow, // 0x1774
-    #[msg("Exceeded max protocol fee")]
+    #[error("Exceeded max protocol fee")]
     ProtocolFeeMaxExceeded, // 0x1775
-    #[msg("Protocol fee not enough")]
+    #[error("Protocol fee not enough")]
     ProtocolFeeNotEnough, // 0x1776
-    #[msg("Exceeded max rebate fee")]
+    #[error("Exceeded max rebate fee")]
     RebateFeeMaxExceeded, // 0x1777
-    #[msg("Rebate fee not enough")]
+    #[error("Rebate fee not enough")]
     RebateFeeNotEnough, // 0x1778
-    #[msg("Exceeded max reserve")]
+    #[error("Exceeded max reserve")]
     ReserveMaxExceeded, // 0x1779
-    #[msg("Reserve not enough")]
+    #[error("Reserve not enough")]
     ReserveNotEnough, // 0x177a
-    #[msg("Reserve less than fee")]
+    #[error("Reserve less than fee")]
     ReserveLessThanFee, // 0x177b
 
-    #[msg("Too Many Authorities")]
+    #[error("Too Many Authorities")]
     TooManyAuthorities, // 0x177c
-    #[msg("Woo oracle bound exceed limit")]
+    #[error("Woo oracle bound exceed limit")]
     WooOracleBoundLimit, //0x177d
 
-    #[msg("Woo oracle is not feasible")]
+    #[error("Woo oracle is not feasible")]
     WooOracleNotFeasible, //0x177e
-    #[msg("Woo oracle price is not valid")]
+    #[error("Woo oracle price is not valid")]
     WooOraclePriceNotValid, //0x177f
-    #[msg("Woo oracle price below range MIN")]
+    #[error("Woo oracle price below range MIN")]
     WooOraclePriceRangeMin, //0x1780
-    #[msg("Woo oracle price exceed range MAX")]
+    #[error("Woo oracle price exceed range MAX")]
     WooOraclePriceRangeMax, //0x1781
-    #[msg("Woo oracle spread exceed 1E18")]
+    #[error("Woo oracle spread exceed 1E18")]
     WooOracleSpreadExceed, //0x1782
 
-    #[msg("Woo pp exceed max notional value")]
+    #[error("Woo pp exceed max notional value")]
     WooPoolExceedMaxNotionalValue, //0x1783
-    #[msg("Woo pp exceed max gamma")]
+    #[error("Woo pp exceed max gamma")]
     WooPoolExceedMaxGamma, //0x1784
 
-    #[msg("Src Balance < LP Deposit Amount.")]
+    #[error("Src Balance < LP Deposit Amount.")]
     NotEnoughBalance, //0x1785
-    #[msg("Not enough out")]
+    #[error("Not enough out")]
     NotEnoughOut, //0x1786
-    #[msg("Amount out below minimum threshold")]
+    #[error("Amount out below minimum threshold")]
     AmountOutBelowMinimum, //0x1787
-    #[msg("Amount exceeds max balance cap")]
+    #[error("Amount exceeds max balance cap")]
     BalanceCapExceeds, //0x1788
-    #[msg("Swap pool invalid")]
+    #[error("Swap pool invalid")]
     SwapPoolInvalid, //0x1789
 
-    #[msg("invalid authority")]
+    #[error("invalid authority")]
     InvalidAuthority,
 }
 

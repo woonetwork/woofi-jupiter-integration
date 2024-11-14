@@ -31,8 +31,9 @@
 * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use anyhow::Result;
 use crate::{constants::*, errors::ErrorCode};
-use anchor_lang::prelude::*;
+use anchor_lang::prelude::{account, AnchorSerialize, AnchorDeserialize, borsh, Pubkey, InitSpace};
 
 #[account]
 #[derive(InitSpace)]

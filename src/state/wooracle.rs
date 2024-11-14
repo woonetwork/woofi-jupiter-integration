@@ -33,9 +33,11 @@
 
 use std::cmp::{max, min};
 
+use anyhow::{Error, Result};
+use solana_sdk::sysvar::Sysvar;
 use crate::errors::ErrorCode;
 use crate::{util::checked_mul_div, constants::{ONE_E18_U128, ONE_E18_U64}};
-use anchor_lang::prelude::*;
+use anchor_lang::prelude::{account, AnchorSerialize, AnchorDeserialize, borsh, Clock, Pubkey, InitSpace};
 
 #[account]
 #[derive(InitSpace)]
@@ -86,10 +88,6 @@ impl Wooracle {
     }
 
     pub fn update_bound(&mut self, bound: u64) -> Result<()> {
-        require!(
-            bound > 0 && bound < ONE_E18_U64,
-            ErrorCode::WooOracleBoundLimit
-        );
         self.bound = bound;
         Ok(())
     }
@@ -159,34 +157,4 @@ impl Wooracle {
         Ok(())
     }
 
-    pub fn update_spread_for_new_price_and_spread(
-        &mut self,
-        price: u128,
-        spread: u64,
-    ) -> Result<()> {
-        //require(spread < 1e18, "!_spread");
-        require!(spread < ONE_E18_U64, ErrorCode::WooOracleSpreadExceed);
-
-        let pre_s = self.spread;
-        let pre_p = self.price;
-        if pre_p == 0 || price == 0 || pre_s >= ONE_E18_U64 {
-            // previous price or current price is 0, just use spread
-            return self.update_spread(spread);
-        }
-
-        let max_p = max(price, pre_p);
-        let min_p = min(price, pre_p);
-        let calc_a = checked_mul_div(ONE_E18_U128, min_p, max_p)?;
-        let anti_s = checked_mul_div(
-            ONE_E18_U128,
-            calc_a,
-            ONE_E18_U128.checked_sub(pre_s as u128).ok_or(ErrorCode::MathOverflow)?,
-        )?;
-        if anti_s < ONE_E18_U128 {
-            let new_s = ONE_E18_U128.checked_sub(anti_s).ok_or(ErrorCode::MathOverflow)? as u64;
-            self.update_spread(max(new_s, spread))
-        } else {
-            self.update_spread(spread)
-        }
-    }
 }
