@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Context, Result};
 use anchor_lang::{prelude::{account, borsh, AnchorDeserialize, AnchorSerialize, InitSpace, Pubkey}, Accounts, Key};
-use solana_sdk::{clock::Clock, sysvar::Sysvar};
+use solana_sdk::{clock::Clock};
 
 use crate::{constants::*, errors::ErrorCode, state::{wooracle::*, WooConfig}};
 
@@ -21,20 +21,21 @@ pub struct GetStateResult {
 }
 
 pub fn get_price_impl<'info>(
+    clock: &Clock,
     oracle: &Wooracle,
     price_update: &mut PriceUpdateV2,
     quote_price_update: &mut PriceUpdateV2,
 ) -> Result<GetPriceResult> {
-    let now = Clock::get()?.unix_timestamp;
+    let now = clock.unix_timestamp;
 
     let pyth_result = price_update.get_price_no_older_than(
-        &Clock::get()?,
+        clock,
         oracle.maximum_age,
         &oracle.feed_account.key().to_bytes(),
     ).ok().context("pyth price update failed")?;
 
     let quote_price_result = quote_price_update.get_price_no_older_than(
-        &Clock::get()?,
+        clock,
         oracle.maximum_age,
         &oracle.quote_feed_account.key().to_bytes(),
     ).ok().context("pyth price update failed")?;
@@ -81,11 +82,12 @@ pub fn get_price_impl<'info>(
 }
 
 pub fn get_state_impl<'info>(
+    clock: &Clock,
     oracle: &Wooracle,
     price_update: &mut PriceUpdateV2,
     quote_price_update: &mut PriceUpdateV2,
 ) -> Result<GetStateResult> {
-    let price_result = get_price_impl(oracle, price_update, quote_price_update)?;
+    let price_result = get_price_impl(clock, oracle, price_update, quote_price_update)?;
     Ok(GetStateResult {
         price_out: price_result.price_out,
         spread: oracle.spread,

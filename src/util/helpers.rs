@@ -12,7 +12,7 @@ use solana_program::{
 // pub const USDC: Pubkey = pubkey!("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 
 // DEV
-pub const WOOFI_PROGRAM_ID: Pubkey = pubkey!("HJkRi7zrKsRLXUGhFhehRsoajwqLFuG2ahnup3YLFDrH");
+pub const WOOFI_PROGRAM_ID: Pubkey = pubkey!("Es677W33uwrXLSqjV3rqcz5sftyarupdV3vDpQ9LXGow");
 
 pub const SOL: Pubkey = pubkey!("So11111111111111111111111111111111111111112");
 pub const USDC: Pubkey = pubkey!("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU");

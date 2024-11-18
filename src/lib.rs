@@ -38,7 +38,7 @@ use errors::ErrorCode;
 use state::{wooconfig, woopool, WooPool, Wooracle};
 use util::{checked_mul_div_round_up, decimals, get_price, get_wooconfig_address, get_woopool_address, get_wooracle_address, swap_math, Decimals, GetPriceResult, GetStateResult, SOL, SOL_FEED_ACCOUNT, SOL_PRICE_UPDATE, USDC, USDC_FEED_ACCOUNT, USDC_PRICE_UPDATE};
 use std::{cmp::max, collections::HashMap, convert::TryInto};
-use solana_sdk::{program_pack::Pack, pubkey::Pubkey};
+use solana_sdk::{clock::Clock, program_pack::Pack, pubkey::Pubkey, sysvar};
 
 use jupiter_amm_interface::{
     try_get_account_data, AccountMap, Amm, AmmContext, KeyedAccount, Quote, QuoteParams, Swap, SwapAndAccountMetas, SwapMode, SwapParams
@@ -161,11 +161,14 @@ impl Amm for WoofiSwap {
     
     fn get_accounts_to_update(&self) -> Vec<Pubkey> {
         vec![self.token_a_wooracle, self.token_a_woopool, self.token_a_price_update,
-             self.token_b_wooracle, self.token_b_woopool, self.token_b_price_update
+             self.token_b_wooracle, self.token_b_woopool, self.token_b_price_update,
+             sysvar::clock::ID
             ]
     }
     
     fn update(&mut self, account_map: &AccountMap) -> Result<()> {
+        println!("start update:");
+
         let token_a_wooracle_data = &mut try_get_account_data(account_map, &self.token_a_wooracle)?;
         let token_a_wooracle = & Wooracle::try_deserialize( token_a_wooracle_data)?;
 
@@ -187,6 +190,13 @@ impl Amm for WoofiSwap {
         let quote_price_update_data = &mut try_get_account_data(account_map, &self.quote_price_update)?;
         let quote_price_update = &mut PriceUpdateV2::try_deserialize(quote_price_update_data)?;
 
+        let clock: Clock = match account_map.get(&sysvar::clock::ID) {
+            Some(account) => bincode::deserialize(&account.data)
+                .context("Failed to deserialize sysvar::clock::ID")
+                .unwrap(),
+            None => Clock::default(), // some amms don't have clock snapshot
+        };
+        
         let fee_rate: u16 = if self.token_a_mint == self.quote_mint {
             token_b_woopool.fee_rate
         } else if self.token_b_mint == self.quote_mint {
@@ -194,22 +204,26 @@ impl Amm for WoofiSwap {
         } else {
             max(token_a_woopool.fee_rate, token_b_woopool.fee_rate)
         };
+
+        println!("fee_rate:{}", fee_rate);
     
         let decimals_a = Decimals::new(
             token_a_wooracle.price_decimals as u32,
             token_a_wooracle.quote_decimals as u32,
             token_a_wooracle.base_decimals as u32,
         );
+
         let state_a =
-            get_price::get_state_impl(token_a_wooracle, token_a_price_update, quote_price_update)?;
+            get_price::get_state_impl(&clock, token_a_wooracle, token_a_price_update, quote_price_update)?;
 
         let decimals_b = Decimals::new(
             token_b_wooracle.price_decimals as u32,
             token_b_wooracle.quote_decimals as u32,
             token_b_wooracle.base_decimals as u32,
         );
+
         let state_b =
-            get_price::get_state_impl(token_b_wooracle, token_b_price_update, quote_price_update)?;    
+            get_price::get_state_impl(&clock, token_b_wooracle, token_b_price_update, quote_price_update)?;    
 
         self.fee_rate = fee_rate;
         self.decimals_a = decimals_a?;

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::{Context, Error};
-use jupiter_amm_interface::{Amm, AmmContext, ClockRef, KeyedAccount, SwapMode};
+use jupiter_amm_interface::{AccountMap, Amm, AmmContext, ClockRef, KeyedAccount, QuoteParams, SwapMode};
 
 use solana_client::{
     nonblocking::rpc_client::{RpcClient},
@@ -9,18 +9,27 @@ use solana_client::{
     rpc_response::{Response, RpcKeyedAccount, RpcResponseContext},
     rpc_sender::{RpcSender, RpcTransportStats},
 };
-use solana_program_test::{BanksClient, BanksClientError, ProgramTestContext};
+use solana_program_test::{BanksClient, BanksClientError, ProgramTest, ProgramTestContext};
 use solana_sdk::{
     account::Account, clock::Clock, compute_budget::ComputeBudgetInstruction,
     instruction::Instruction, program_option::COption, program_pack::Pack, pubkey::Pubkey,
     signature::Keypair, signer::Signer, sysvar, transaction::Transaction,
 };
-use woofi_jupiter::WoofiSwap;
+use woofi_jupiter::{util::SOL, util::USDC, WoofiSwap};
 use woofi_jupiter::util::WOOFI_PROGRAM_ID;
 
 #[tokio::test]
 // TODO replace with local accounts
 async fn test_jupiter_local() -> Result<(), Error> {
+
+    let mut pt = ProgramTest::default();
+    pt.prefer_bpf(true);
+
+    let mut context = pt.start_with_context().await;
+    let clock_sysvar: Clock = context.banks_client.get_sysvar().await.unwrap();
+
+    print!("clock_sysvar:{}\n", clock_sysvar.unix_timestamp);
+
     let client = RpcClient::new("https://api.devnet.solana.com".to_string());
     let account = client.get_account(&WOOFI_PROGRAM_ID).await?;
 
@@ -32,8 +41,7 @@ async fn test_jupiter_local() -> Result<(), Error> {
         params: None,
     };
 
-    let woofi_swap = WoofiSwap::from_keyed_account(&market_account, &amm_context).unwrap();
-    //println!("woofi {} {} {} {}",
+    let mut woofi_swap = WoofiSwap::from_keyed_account(&market_account, &amm_context).unwrap();
     println!("woofi_swap.token_a_mint:{}", woofi_swap.token_a_mint);
     println!("woofi_swap.token_a_wooracle:{}", woofi_swap.token_a_wooracle);
     println!("woofi_swap.token_a_woopool:{}", woofi_swap.token_a_woopool);
@@ -45,6 +53,26 @@ async fn test_jupiter_local() -> Result<(), Error> {
     println!("woofi_swap.token_b_woopool:{}", woofi_swap.token_b_woopool);
     println!("woofi_swap.token_b_feed_account:{}", woofi_swap.token_b_feed_account);
     println!("woofi_swap.token_b_price_update:{}", woofi_swap.token_b_price_update);
+
+    let pubkeys = woofi_swap.get_accounts_to_update();
+    let accounts_map: AccountMap = pubkeys
+        .iter()
+        .zip(client.get_multiple_accounts(&pubkeys).await?)
+        .map(|(key, acc)| (*key, acc.unwrap()))
+        .collect();
+
+    woofi_swap.update(&accounts_map)?;
+    let result = woofi_swap.quote(&QuoteParams{
+        amount: 1000,
+        input_mint: SOL,
+        output_mint: USDC,
+        swap_mode: SwapMode::ExactIn
+    })?;
+
+    println!("result.out_amount:{}", result.out_amount);
+    println!("result.in_amount:{}", result.in_amount);
+    println!("result.fee_amount:{}", result.fee_amount);
+    println!("result.fee_mint:{}", result.fee_mint);
 
     Ok(())
 }
