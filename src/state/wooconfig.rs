@@ -14,19 +14,19 @@ pub struct WooConfig {
 
     pub paused: bool,
 
-    #[max_len(5)]
+    #[max_len(ADMIN_AUTH_MAX_LEN)]
     pub woopool_admin_authority: Vec<Pubkey>,
 
-    #[max_len(5)]
+    #[max_len(ADMIN_AUTH_MAX_LEN)]
     pub wooracle_admin_authority: Vec<Pubkey>,
 
-    #[max_len(5)]
+    #[max_len(FEE_AUTH_MAX_LEN)]
     pub fee_authority: Vec<Pubkey>,
 
-    #[max_len(5)]
+    #[max_len(GUARDIAN_AUTH_MAX_LEN)]
     pub guardian_authority: Vec<Pubkey>,
 
-    #[max_len(5)]
+    #[max_len(PAUSE_AUTH_MAX_LEN)]
     pub pause_authority: Vec<Pubkey>,
 
     pub new_authority: Pubkey,

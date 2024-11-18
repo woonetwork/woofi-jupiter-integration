@@ -35,8 +35,8 @@ use anyhow::{anyhow, Context, Result};
 
 use constants::ONE_E5_U128;
 use errors::ErrorCode;
-use state::{woopool, WooPool, Wooracle};
-use util::{checked_mul_div_round_up, decimals, get_price, swap_math, Decimals, GetStateResult};
+use state::{wooconfig, woopool, WooPool, Wooracle};
+use util::{checked_mul_div_round_up, decimals, get_price, get_wooconfig_address, get_woopool_address, get_wooracle_address, swap_math, Decimals, GetPriceResult, GetStateResult, SOL, SOL_FEED_ACCOUNT, SOL_PRICE_UPDATE, USDC, USDC_FEED_ACCOUNT, USDC_PRICE_UPDATE};
 use std::{cmp::max, collections::HashMap, convert::TryInto};
 use solana_sdk::{program_pack::Pack, pubkey::Pubkey};
 
@@ -49,34 +49,36 @@ use pyth_solana_receiver_sdk::price_update::PriceUpdateV2;
 mod constants;
 mod errors;
 mod state;
-mod util;
+pub mod util;
 
 declare_id!("woocYbcZkJ1ryopvtNP7Lr367wbW4WrMgxmzroe6VWU");
 
 pub struct WoofiSwap {
-    key: Pubkey,
-    label: String,
-    quote_mint: Pubkey,    
-    token_a_mint: Pubkey,
-    token_b_mint: Pubkey,
-    program_id: Pubkey,
+    pub key: Pubkey,
+    pub label: String,
+    pub quote_mint: Pubkey,    
+    pub token_a_mint: Pubkey,
+    pub token_b_mint: Pubkey,
+    pub program_id: Pubkey,
 
-    wooconfig: Pubkey,
-    token_a_wooracle: Pubkey,
-    token_a_woopool: Pubkey,
-    token_a_price_update: Pubkey,
-    token_b_wooracle: Pubkey,
-    token_b_woopool: Pubkey,
-    token_b_price_update: Pubkey,
-    quote_price_update: Pubkey,
+    pub wooconfig: Pubkey,
+    pub token_a_wooracle: Pubkey,
+    pub token_a_woopool: Pubkey,
+    pub token_a_feed_account: Pubkey,
+    pub token_a_price_update: Pubkey,
+    pub token_b_wooracle: Pubkey,
+    pub token_b_woopool: Pubkey,
+    pub token_b_feed_account: Pubkey,
+    pub token_b_price_update: Pubkey,
+    pub quote_price_update: Pubkey,
 
-    fee_rate: u16,
-    decimals_a: Decimals,
-    state_a: GetStateResult,
-    woopool_a: WooPool,
-    decimals_b: Decimals,
-    state_b: GetStateResult,
-    woopool_b: WooPool
+    pub fee_rate: u16,
+    pub decimals_a: Decimals,
+    pub state_a: GetStateResult,
+    pub woopool_a: Option<WooPool>,
+    pub decimals_b: Decimals,
+    pub state_b: GetStateResult,
+    pub woopool_b: Option<WooPool>
 }
 
 impl WoofiSwap {
@@ -90,10 +92,59 @@ impl Amm for WoofiSwap {
         self.program_id
     }
 
-    fn from_keyed_account(keyed_account: &KeyedAccount, amm_context: &AmmContext) -> Result<Self>
-    where
-        Self: Sized {
-        todo!()
+    fn from_keyed_account(keyed_account: &KeyedAccount, amm_context: &AmmContext) -> Result<Self> {
+        let program_id = keyed_account.key;
+        let quote_mint = USDC;
+        let token_a_mint = SOL;
+        let token_b_mint = USDC;
+        let token_a_feed_account = SOL_FEED_ACCOUNT;
+        let token_a_price_update = SOL_PRICE_UPDATE;
+        let token_b_feed_account = USDC_FEED_ACCOUNT;
+        let token_b_price_update = USDC_PRICE_UPDATE;
+        let quote_price_update = USDC_PRICE_UPDATE;
+        let wooconfig = get_wooconfig_address(&program_id).0;
+        let token_a_wooracle = get_wooracle_address(&wooconfig, &token_a_mint, &token_a_feed_account, &token_a_price_update, &program_id).0;
+        let token_b_wooracle = get_wooracle_address(&wooconfig, &token_b_mint, &token_b_feed_account, &token_b_price_update, &program_id).0;
+        let token_a_woopool = get_woopool_address(&wooconfig, &token_a_mint, &quote_mint, &program_id).0;
+        let token_b_woopool = get_woopool_address(&wooconfig, &token_b_mint, &quote_mint, &program_id).0;
+
+        let init_decimals = Decimals {
+            price_dec: 0,
+            quote_dec: 0,
+            base_dec: 0
+        };
+        let init_state_result = GetStateResult {
+            price_out: 0,
+            spread: 0,
+            coeff: 0,
+             feasible_out: false
+        };
+
+        Ok(WoofiSwap {
+            key: program_id,
+            label: "WoofiSwap".into(),
+            quote_mint,
+            token_a_mint,
+            token_b_mint,
+            program_id,
+            wooconfig,
+            token_a_wooracle,
+            token_a_woopool,
+            token_a_feed_account,
+            token_a_price_update,
+            token_b_wooracle,
+            token_b_woopool,
+            token_b_feed_account,
+            token_b_price_update,
+            quote_price_update,
+            fee_rate: 0,
+            decimals_a: init_decimals,
+            state_a: init_state_result,
+            woopool_a: None,
+            decimals_b: init_decimals,
+            state_b: init_state_result,
+            woopool_b: None
+        })
     }
     
     fn label(&self) -> String {
@@ -163,10 +214,10 @@ impl Amm for WoofiSwap {
         self.fee_rate = fee_rate;
         self.decimals_a = decimals_a?;
         self.state_a = state_a;
-        self.woopool_a = token_a_woopool;
+        self.woopool_a = Some(token_a_woopool);
         self.decimals_b = decimals_b?;
         self.state_b = state_b;
-        self.woopool_b = token_b_woopool;
+        self.woopool_b = Some(token_b_woopool);
 
         Ok(())
     }
@@ -175,17 +226,18 @@ impl Amm for WoofiSwap {
         if quote_params.swap_mode == SwapMode::ExactIn {
             let mut decimals_a = &self.decimals_a;
             let mut state_a = &self.state_a;
-            let mut woopool_a = &self.woopool_a;
+            let mut woopool_a = &self.woopool_a.clone().ok_or(ErrorCode::WooOracleNotFeasible)?;
             let mut decimals_b = &self.decimals_b;
             let mut state_b = &self.state_b;
-            let mut woopool_b = &self.woopool_b;
+            let mut woopool_b = &self.woopool_b.clone().ok_or(ErrorCode::WooOracleNotFeasible)?;
             if self.token_b_mint == quote_params.input_mint {
                 decimals_a = &self.decimals_b;
                 decimals_b = &self.decimals_a;
                 state_a = &self.state_b;
                 state_b = &self.state_a;
-                woopool_a = &self.woopool_b;
-                woopool_b = &self.woopool_a;
+                let woopool_c = woopool_a;
+                woopool_a = woopool_b;
+                woopool_b = woopool_c;
             }
 
             let mut quote_amount = quote_params.amount as u128;
