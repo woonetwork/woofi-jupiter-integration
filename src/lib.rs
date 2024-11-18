@@ -51,12 +51,16 @@ mod errors;
 mod state;
 pub mod util;
 
+#[cfg(feature = "devnet")]
+declare_id!("Es677W33uwrXLSqjV3rqcz5sftyarupdV3vDpQ9LXGow");
+
+#[cfg(not(feature = "devnet"))]
 declare_id!("woocYbcZkJ1ryopvtNP7Lr367wbW4WrMgxmzroe6VWU");
 
 pub struct WoofiSwap {
     pub key: Pubkey,
     pub label: String,
-    pub quote_mint: Pubkey,    
+    pub quote_mint: Pubkey,
     pub token_a_mint: Pubkey,
     pub token_b_mint: Pubkey,
     pub program_id: Pubkey,
@@ -79,12 +83,6 @@ pub struct WoofiSwap {
     pub decimals_b: Decimals,
     pub state_b: GetStateResult,
     pub woopool_b: Option<WooPool>
-}
-
-impl WoofiSwap {
-    fn get_authority(&self) -> Pubkey {
-        Pubkey::find_program_address(&[&self.key.to_bytes()], &self.program_id).0
-    }
 }
 
 impl Amm for WoofiSwap {
@@ -121,7 +119,7 @@ impl Amm for WoofiSwap {
         };
 
         Ok(WoofiSwap {
-            key: program_id,
+            key: keyed_account.key,
             label: "WoofiSwap".into(),
             quote_mint,
             token_a_mint,

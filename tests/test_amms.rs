@@ -16,27 +16,18 @@ use solana_sdk::{
     signature::Keypair, signer::Signer, sysvar, transaction::Transaction,
 };
 use woofi_jupiter::{util::SOL, util::USDC, WoofiSwap};
-use woofi_jupiter::util::WOOFI_PROGRAM_ID;
 
 #[tokio::test]
 // TODO replace with local accounts
 async fn test_jupiter_local() -> Result<(), Error> {
 
-    let mut pt = ProgramTest::default();
-    pt.prefer_bpf(true);
-
-    let mut context = pt.start_with_context().await;
-    let clock_sysvar: Clock = context.banks_client.get_sysvar().await.unwrap();
-
-    print!("clock_sysvar:{}\n", clock_sysvar.unix_timestamp);
-
     let client = RpcClient::new("https://api.devnet.solana.com".to_string());
-    let account = client.get_account(&WOOFI_PROGRAM_ID).await?;
+    let account = client.get_account(&woofi_jupiter::ID).await?;
 
     let amm_context = get_amm_context(&client).await?;
 
     let market_account = KeyedAccount {
-        key: WOOFI_PROGRAM_ID,
+        key: woofi_jupiter::ID,
         account,
         params: None,
     };
@@ -99,5 +90,3 @@ pub async fn get_amm_context(rpc_client: &RpcClient) -> anyhow::Result<AmmContex
         clock_ref: get_clock_ref(rpc_client).await?,
     })
 }
-
-
