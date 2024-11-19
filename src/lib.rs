@@ -1,4 +1,4 @@
-use anchor_lang::{declare_id, prelude::Account, AccountDeserialize};
+use anchor_lang::{declare_id, prelude::AccountMeta, AccountDeserialize};
 /*
 
 ░██╗░░░░░░░██╗░█████╗░░█████╗░░░░░░░███████╗██╗
@@ -35,13 +35,13 @@ use anyhow::{Context, Result};
 
 use constants::ONE_E5_U128;
 use errors::ErrorCode;
-use state::{woopool, WooPool, Wooracle};
-use util::{checked_mul_div_round_up, decimals, get_price, get_wooconfig_address, get_woopool_address, get_wooracle_address, swap_math, Decimals, GetStateResult, SOL, SOL_FEED_ACCOUNT, SOL_PRICE_UPDATE, USDC, USDC_FEED_ACCOUNT, USDC_PRICE_UPDATE};
+use state::{WooPool, Wooracle};
+use util::{checked_mul_div_round_up, get_price, get_wooconfig_address, get_woopool_address, get_wooracle_address, swap_math, Decimals, GetStateResult, SOL, SOL_FEED_ACCOUNT, SOL_PRICE_UPDATE, USDC, USDC_FEED_ACCOUNT, USDC_PRICE_UPDATE};
 use std::{cmp::max, convert::TryInto};
 use solana_sdk::{clock::Clock, pubkey::Pubkey, sysvar};
 
 use jupiter_amm_interface::{
-    try_get_account_data, AccountMap, Amm, AmmContext, KeyedAccount, Quote, QuoteParams, Swap, SwapAndAccountMetas, SwapMode, SwapParams
+    try_get_account_data, AccountMap, Amm, AmmContext, KeyedAccount, Quote, QuoteParams, SwapAndAccountMetas, SwapParams
 };
 
 use pyth_solana_receiver_sdk::price_update::PriceUpdateV2;
@@ -57,6 +57,7 @@ declare_id!("Es677W33uwrXLSqjV3rqcz5sftyarupdV3vDpQ9LXGow");
 #[cfg(not(feature = "devnet"))]
 declare_id!("woocYbcZkJ1ryopvtNP7Lr367wbW4WrMgxmzroe6VWU");
 
+#[derive(Clone)]
 pub struct WoofiSwap {
     pub key: Pubkey,
     pub label: String,
@@ -74,6 +75,7 @@ pub struct WoofiSwap {
     pub token_b_woopool: Pubkey,
     pub token_b_feed_account: Pubkey,
     pub token_b_price_update: Pubkey,
+    pub quote_pool: Pubkey,
     pub quote_price_update: Pubkey,
 
     pub fee_rate: u16,
@@ -105,7 +107,7 @@ impl Amm for WoofiSwap {
         let token_b_wooracle = get_wooracle_address(&wooconfig, &token_b_mint, &token_b_feed_account, &token_b_price_update, &program_id).0;
         let token_a_woopool = get_woopool_address(&wooconfig, &token_a_mint, &quote_mint, &program_id).0;
         let token_b_woopool = get_woopool_address(&wooconfig, &token_b_mint, &quote_mint, &program_id).0;
-
+        let quote_pool = get_woopool_address(&wooconfig, &quote_mint, &quote_mint, &program_id).0;
         Ok(WoofiSwap {
             key: keyed_account.key,
             label: "WoofiSwap".into(),
@@ -123,6 +125,7 @@ impl Amm for WoofiSwap {
             token_b_feed_account,
             token_b_price_update,
             quote_price_update,
+            quote_pool,
             fee_rate: 0,
             decimals_a: None,
             state_a: None,
@@ -266,12 +269,40 @@ impl Amm for WoofiSwap {
     }
     
     fn get_swap_and_account_metas(&self, swap_params: &SwapParams) -> Result<SwapAndAccountMetas> {
-        todo!()
+        let woopool_a = self.woopool_a.ok_or(ErrorCode::SwapPoolInvalid)?;
+        let woopool_b = self.woopool_b.ok_or(ErrorCode::SwapPoolInvalid)?;
+        let quote_vault = woopool_b.token_vault;
+
+        let account_metas = vec![
+            AccountMeta::new(self.wooconfig, false),
+            AccountMeta::new_readonly(spl_token::ID, false),
+            AccountMeta::new(swap_params.token_transfer_authority, true),
+            AccountMeta::new(self.token_a_wooracle, false),
+            AccountMeta::new(self.token_a_woopool, false),
+            AccountMeta::new(swap_params.source_token_account, false),
+            AccountMeta::new(woopool_a.token_vault, false),
+            AccountMeta::new(self.token_a_price_update, false),
+            AccountMeta::new(self.token_b_wooracle, false),
+            AccountMeta::new(self.token_b_woopool, false),
+            AccountMeta::new(swap_params.destination_token_account, false),
+            AccountMeta::new(woopool_b.token_vault, false),
+            AccountMeta::new(self.token_b_price_update, false),
+            AccountMeta::new(self.quote_pool, false),
+            AccountMeta::new(self.quote_price_update, false),
+            AccountMeta::new(quote_vault, false),
+//            AccountMeta::new(self.rebate_to, false),
+        ];
+
+        // Ok(SwapAndAccountMetas {
+        //     swap: Swap::WoofiSwap,
+        //     account_metas
+        // })
+        unimplemented!()
+
     }
     
     fn clone_amm(&self) -> Box<dyn Amm + Send + Sync> {
-        //Box::new(self.clone())
-        todo!()
+        Box::new(self.clone())
     }
-    
+
 }
