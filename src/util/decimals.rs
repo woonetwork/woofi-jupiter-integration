@@ -7,19 +7,9 @@ pub struct Decimals {
 
 impl Decimals {
     pub fn new(price: u32, quote: u32, base: u32) -> Option<Decimals> {
-        let (
-                Some(price_dec), 
-                Some(quote_dec),
-                Some(base_dec)
-            ) = 
-            (
-                10_u64.checked_pow(price),
-                10_u64.checked_pow(quote),
-                10_u64.checked_pow(base)
-            )
-            else {
-                return None
-            };
+        let price_dec = 10_u64.checked_pow(price)?;
+        let quote_dec = 10_u64.checked_pow(quote)?;
+        let base_dec = 10_u64.checked_pow(base)?;
         
         Some(Decimals {
             price_dec,
