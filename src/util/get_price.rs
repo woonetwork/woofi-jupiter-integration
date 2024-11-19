@@ -1,8 +1,8 @@
-use anyhow::{anyhow, Context, Result};
-use anchor_lang::{prelude::{account, borsh, AnchorDeserialize, AnchorSerialize, InitSpace, Pubkey}, Accounts, Key};
-use solana_sdk::{clock::Clock};
+use anyhow::{Context, Result};
+use anchor_lang::{prelude::{borsh, AnchorDeserialize, AnchorSerialize}, Key};
+use solana_sdk::clock::Clock;
 
-use crate::{constants::*, errors::ErrorCode, state::{wooracle::*, WooConfig}};
+use crate::{constants::*, errors::ErrorCode, state::wooracle::*};
 
 use pyth_solana_receiver_sdk::price_update::PriceUpdateV2;
 

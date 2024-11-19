@@ -31,14 +31,14 @@ use anchor_lang::{declare_id, prelude::Account, AccountDeserialize};
 * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 
 use constants::ONE_E5_U128;
 use errors::ErrorCode;
-use state::{wooconfig, woopool, WooPool, Wooracle};
-use util::{checked_mul_div_round_up, decimals, get_price, get_wooconfig_address, get_woopool_address, get_wooracle_address, swap_math, Decimals, GetPriceResult, GetStateResult, SOL, SOL_FEED_ACCOUNT, SOL_PRICE_UPDATE, USDC, USDC_FEED_ACCOUNT, USDC_PRICE_UPDATE};
-use std::{cmp::max, collections::HashMap, convert::TryInto};
-use solana_sdk::{clock::Clock, program_pack::Pack, pubkey::Pubkey, sysvar};
+use state::{WooPool, Wooracle};
+use util::{checked_mul_div_round_up, get_price, get_wooconfig_address, get_woopool_address, get_wooracle_address, swap_math, Decimals, GetStateResult, SOL, SOL_FEED_ACCOUNT, SOL_PRICE_UPDATE, USDC, USDC_FEED_ACCOUNT, USDC_PRICE_UPDATE};
+use std::{cmp::max, convert::TryInto};
+use solana_sdk::{clock::Clock, pubkey::Pubkey, sysvar};
 
 use jupiter_amm_interface::{
     try_get_account_data, AccountMap, Amm, AmmContext, KeyedAccount, Quote, QuoteParams, Swap, SwapAndAccountMetas, SwapMode, SwapParams

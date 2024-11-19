@@ -1,8 +1,6 @@
-use anchor_lang::accounts::program;
 use solana_program::{
     pubkey,
     pubkey::Pubkey,
-    system_program,
 };
 
 // PROD
