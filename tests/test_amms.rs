@@ -19,7 +19,7 @@ use woofi_jupiter::{util::SOL, util::USDC, WoofiSwap};
 
 #[tokio::test]
 // TODO replace with local accounts
-async fn test_jupiter_local() -> Result<(), Error> {
+async fn test_jupiter_quote() -> Result<(), Error> {
 
     let client = RpcClient::new("https://api.devnet.solana.com".to_string());
     let account = client.get_account(&woofi_jupiter::id()).await?;

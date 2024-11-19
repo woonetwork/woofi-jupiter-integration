@@ -190,8 +190,7 @@ impl Amm for WoofiSwap {
 
         let clock: Clock = match account_map.get(&sysvar::clock::ID) {
             Some(account) => bincode::deserialize(&account.data)
-                .context("Failed to deserialize sysvar::clock::ID")
-                .unwrap(),
+                .context("Failed to deserialize sysvar::clock::ID")?,
             None => Clock::default(), // some amms don't have clock snapshot
         };
         
@@ -224,10 +223,10 @@ impl Amm for WoofiSwap {
             get_price::get_state_impl(&clock, token_b_wooracle, token_b_price_update, quote_price_update)?;    
 
         self.fee_rate = fee_rate;
-        self.decimals_a = decimals_a?;
+        self.decimals_a = decimals_a.ok_or(ErrorCode::MathOverflow)?;
         self.state_a = state_a;
         self.woopool_a = Some(token_a_woopool);
-        self.decimals_b = decimals_b?;
+        self.decimals_b = decimals_b.ok_or(ErrorCode::MathOverflow)?;
         self.state_b = state_b;
         self.woopool_b = Some(token_b_woopool);
 

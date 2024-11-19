@@ -1,5 +1,3 @@
-use crate::errors::ErrorCode;
-
 #[derive(Clone, Default, Copy)]
 pub struct Decimals {
     pub price_dec: u64, // 10 ** 8
@@ -8,11 +6,25 @@ pub struct Decimals {
 }
 
 impl Decimals {
-    pub fn new(price: u32, quote: u32, base: u32) -> Result<Decimals, ErrorCode> {
-        Ok(Decimals {
-            price_dec: 10_u64.checked_pow(price).ok_or(ErrorCode::MathOverflow)?,
-            quote_dec: 10_u64.checked_pow(quote).ok_or(ErrorCode::MathOverflow)?,
-            base_dec: 10_u64.checked_pow(base).ok_or(ErrorCode::MathOverflow)?,
+    pub fn new(price: u32, quote: u32, base: u32) -> Option<Decimals> {
+        let (
+                Some(price_dec), 
+                Some(quote_dec),
+                Some(base_dec)
+            ) = 
+            (
+                10_u64.checked_pow(price),
+                10_u64.checked_pow(quote),
+                10_u64.checked_pow(base)
+            )
+            else {
+                return None
+            };
+        
+        Some(Decimals {
+            price_dec,
+            quote_dec,
+            base_dec,
         })
     }
 }
