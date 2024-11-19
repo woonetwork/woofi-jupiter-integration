@@ -91,7 +91,7 @@ impl Amm for WoofiSwap {
     }
 
     fn from_keyed_account(keyed_account: &KeyedAccount, amm_context: &AmmContext) -> Result<Self> {
-        let program_id = keyed_account.key;
+        let program_id = id();
         let quote_mint = USDC;
         let token_a_mint = SOL;
         let token_b_mint = USDC;
@@ -121,10 +121,10 @@ impl Amm for WoofiSwap {
         Ok(WoofiSwap {
             key: keyed_account.key,
             label: "WoofiSwap".into(),
+            program_id,
             quote_mint,
             token_a_mint,
             token_b_mint,
-            program_id,
             wooconfig,
             token_a_wooracle,
             token_a_woopool,

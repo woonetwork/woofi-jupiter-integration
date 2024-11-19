@@ -22,12 +22,12 @@ use woofi_jupiter::{util::SOL, util::USDC, WoofiSwap};
 async fn test_jupiter_local() -> Result<(), Error> {
 
     let client = RpcClient::new("https://api.devnet.solana.com".to_string());
-    let account = client.get_account(&woofi_jupiter::ID).await?;
+    let account = client.get_account(&woofi_jupiter::id()).await?;
 
     let amm_context = get_amm_context(&client).await?;
 
     let market_account = KeyedAccount {
-        key: woofi_jupiter::ID,
+        key: woofi_jupiter::id(),
         account,
         params: None,
     };
