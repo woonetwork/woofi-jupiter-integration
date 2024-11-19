@@ -6,7 +6,11 @@ This module implements the `Amm` trait defined [here](https://github.com/jup-ag/
 To test, simply run:
 
 ```
-cargo test --features "devnet" -- --nocapture
+cargo test -- --nocapture
+
+
+// If test in devnet
+//cargo test --features "devnet" -- --nocapture
 ```
 
 This will print out a quote for selling 0.01 SOL against the Woofi devnet SOL/USDC market. Sample output:

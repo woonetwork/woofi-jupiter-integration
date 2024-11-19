@@ -4,16 +4,12 @@ use solana_program::{
 };
 
 // PROD
-// pub const WOOFI_PROGRAM_ID: Pubkey = pubkey!("woocYbcZkJ1ryopvtNP7Lr367wbW4WrMgxmzroe6VWU");
-
-// pub const SOL: Pubkey = pubkey!("So11111111111111111111111111111111111111112");
-// pub const USDC: Pubkey = pubkey!("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+pub const SOL: Pubkey = pubkey!("So11111111111111111111111111111111111111112");
+pub const USDC: Pubkey = pubkey!("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 
 // DEV
-// pub const WOOFI_PROGRAM_ID: Pubkey = pubkey!("Es677W33uwrXLSqjV3rqcz5sftyarupdV3vDpQ9LXGow");
-
-pub const SOL: Pubkey = pubkey!("So11111111111111111111111111111111111111112");
-pub const USDC: Pubkey = pubkey!("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU");
+// pub const SOL: Pubkey = pubkey!("So11111111111111111111111111111111111111112");
+// pub const USDC: Pubkey = pubkey!("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU");
 
 pub const SOL_FEED_ACCOUNT: Pubkey = pubkey!("H6ARHf6YXhGYeQfUzQNGk6rDNnLBQKrenN712K4AQJEG");
 pub const USDC_FEED_ACCOUNT: Pubkey = pubkey!("Gnt27xtC473ZT2Mw5u8wZ68Z3gULkSTb5DuxJy7eJotD");

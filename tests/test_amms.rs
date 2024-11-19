@@ -9,7 +9,10 @@ use woofi_jupiter::{util::SOL, util::USDC, WoofiSwap};
 // TODO replace with local accounts
 async fn test_jupiter_quote() -> Result<(), Error> {
 
-    let client = RpcClient::new("https://api.devnet.solana.com".to_string());
+    // devnet
+    //let client = RpcClient::new("https://api.devnet.solana.com".to_string());
+    let client = RpcClient::new("https://api.mainnet-beta.solana.com".to_string());
+    
     let account = client.get_account(&woofi_jupiter::id()).await?;
 
     let amm_context = get_amm_context(&client).await?;
