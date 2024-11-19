@@ -1,7 +1,5 @@
 use anchor_lang::prelude::*;
 
-use crate::errors::ErrorCode;
-
 pub const ADMIN_AUTH_MAX_LEN: usize = 5;
 pub const FEE_AUTH_MAX_LEN: usize = 5;
 pub const GUARDIAN_AUTH_MAX_LEN: usize = 5;

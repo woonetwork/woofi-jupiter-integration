@@ -35,8 +35,8 @@ use anyhow::{Context, Result};
 
 use constants::ONE_E5_U128;
 use errors::ErrorCode;
-use state::{WooPool, Wooracle};
-use util::{checked_mul_div_round_up, get_price, get_wooconfig_address, get_woopool_address, get_wooracle_address, swap_math, Decimals, GetStateResult, SOL, SOL_FEED_ACCOUNT, SOL_PRICE_UPDATE, USDC, USDC_FEED_ACCOUNT, USDC_PRICE_UPDATE};
+use state::{woopool, WooPool, Wooracle};
+use util::{checked_mul_div_round_up, decimals, get_price, get_wooconfig_address, get_woopool_address, get_wooracle_address, swap_math, Decimals, GetStateResult, SOL, SOL_FEED_ACCOUNT, SOL_PRICE_UPDATE, USDC, USDC_FEED_ACCOUNT, USDC_PRICE_UPDATE};
 use std::{cmp::max, convert::TryInto};
 use solana_sdk::{clock::Clock, pubkey::Pubkey, sysvar};
 
@@ -77,11 +77,11 @@ pub struct WoofiSwap {
     pub quote_price_update: Pubkey,
 
     pub fee_rate: u16,
-    pub decimals_a: Decimals,
-    pub state_a: GetStateResult,
+    pub decimals_a: Option<Decimals>,
+    pub state_a: Option<GetStateResult>,
     pub woopool_a: Option<WooPool>,
-    pub decimals_b: Decimals,
-    pub state_b: GetStateResult,
+    pub decimals_b: Option<Decimals>,
+    pub state_b: Option<GetStateResult>,
     pub woopool_b: Option<WooPool>
 }
 
@@ -90,7 +90,7 @@ impl Amm for WoofiSwap {
         self.program_id
     }
 
-    fn from_keyed_account(keyed_account: &KeyedAccount, amm_context: &AmmContext) -> Result<Self> {
+    fn from_keyed_account(keyed_account: &KeyedAccount, _amm_context: &AmmContext) -> Result<Self> {
         let program_id = id();
         let quote_mint = USDC;
         let token_a_mint = SOL;
@@ -105,18 +105,6 @@ impl Amm for WoofiSwap {
         let token_b_wooracle = get_wooracle_address(&wooconfig, &token_b_mint, &token_b_feed_account, &token_b_price_update, &program_id).0;
         let token_a_woopool = get_woopool_address(&wooconfig, &token_a_mint, &quote_mint, &program_id).0;
         let token_b_woopool = get_woopool_address(&wooconfig, &token_b_mint, &quote_mint, &program_id).0;
-
-        let init_decimals = Decimals {
-            price_dec: 0,
-            quote_dec: 0,
-            base_dec: 0
-        };
-        let init_state_result = GetStateResult {
-            price_out: 0,
-            spread: 0,
-            coeff: 0,
-             feasible_out: false
-        };
 
         Ok(WoofiSwap {
             key: keyed_account.key,
@@ -136,11 +124,11 @@ impl Amm for WoofiSwap {
             token_b_price_update,
             quote_price_update,
             fee_rate: 0,
-            decimals_a: init_decimals,
-            state_a: init_state_result,
+            decimals_a: None,
+            state_a: None,
             woopool_a: None,
-            decimals_b: init_decimals,
-            state_b: init_state_result,
+            decimals_b: None,
+            state_b: None,
             woopool_b: None
         })
     }
@@ -202,8 +190,6 @@ impl Amm for WoofiSwap {
             max(token_a_woopool.fee_rate, token_b_woopool.fee_rate)
         };
 
-        println!("fee_rate:{}", fee_rate);
-    
         let decimals_a = Decimals::new(
             token_a_wooracle.price_decimals as u32,
             token_a_wooracle.quote_decimals as u32,
@@ -223,80 +209,60 @@ impl Amm for WoofiSwap {
             get_price::get_state_impl(&clock, token_b_wooracle, token_b_price_update, quote_price_update)?;    
 
         self.fee_rate = fee_rate;
-        self.decimals_a = decimals_a.ok_or(ErrorCode::MathOverflow)?;
-        self.state_a = state_a;
+        self.decimals_a = decimals_a;
+        self.state_a = Some(state_a);
         self.woopool_a = Some(token_a_woopool);
-        self.decimals_b = decimals_b.ok_or(ErrorCode::MathOverflow)?;
-        self.state_b = state_b;
+        self.decimals_b = decimals_b;
+        self.state_b = Some(state_b);
         self.woopool_b = Some(token_b_woopool);
 
         Ok(())
     }
     
     fn quote(&self, quote_params: &QuoteParams) -> Result<Quote> {
-        if quote_params.swap_mode == SwapMode::ExactIn {
-            let mut decimals_a = &self.decimals_a;
-            let mut state_a = &self.state_a;
-            let mut woopool_a = &self.woopool_a.clone().ok_or(ErrorCode::WooOracleNotFeasible)?;
-            let mut decimals_b = &self.decimals_b;
-            let mut state_b = &self.state_b;
-            let mut woopool_b = &self.woopool_b.clone().ok_or(ErrorCode::WooOracleNotFeasible)?;
-            if self.token_b_mint == quote_params.input_mint {
-                decimals_a = &self.decimals_b;
-                decimals_b = &self.decimals_a;
-                state_a = &self.state_b;
-                state_b = &self.state_a;
-                let woopool_c = woopool_a;
-                woopool_a = woopool_b;
-                woopool_b = woopool_c;
+        let (decimals_a, state_a, woopool_a, decimals_b, state_b, woopool_b) = {
+            if self.token_a_mint == quote_params.input_mint {
+                (self.decimals_a, self.state_a, self.woopool_a, self.decimals_b, self.state_b, self.woopool_b)
+            } else {
+                (self.decimals_b, self.state_b, self.woopool_b, self.decimals_a, self.state_a, self.woopool_a)
             }
+        };
 
-            let mut quote_amount = quote_params.amount as u128;
-            if quote_params.input_mint != self.quote_mint {
-        
-                let (_quote_amount, _) = swap_math::calc_quote_amount_sell_base(
-                    quote_params.amount as u128,
-                    woopool_a,
-                    decimals_a,
-                    state_a,
-                )?;
-        
-                quote_amount = _quote_amount;
-            }
-        
-            let swap_fee = checked_mul_div_round_up(quote_amount, self.fee_rate as u128, ONE_E5_U128)?;
-            quote_amount = quote_amount.checked_sub(swap_fee).ok_or(ErrorCode::MathOverflow)?;
-        
-            let mut to_amount = quote_amount;
-            if quote_params.output_mint != self.quote_mint {
-                let (_to_amount, _) = swap_math::calc_base_amount_sell_quote(
-                    quote_amount,
-                    woopool_b,
-                    decimals_b,
-                    state_b,
-                )?;
-                to_amount = _to_amount;
-            }
-        
-            Ok(Quote {
-                fee_pct: self.fee_rate.into(),
-                in_amount: quote_params.amount.try_into()?,
-                out_amount: to_amount as u64,
-                fee_amount: swap_fee as u64,
-                fee_mint: self.quote_mint,
-                ..Quote::default()
-            })
-        } else {
-            Ok(Quote {
-                fee_pct: self.fee_rate.into(),
-                in_amount: 0,
-                out_amount: 0,
-                fee_amount: 0,
-                fee_mint: self.quote_mint,
-                ..Quote::default()
-            })
-
+        let mut quote_amount = quote_params.amount as u128;
+        if quote_params.input_mint != self.quote_mint {
+    
+            let (_quote_amount, _) = swap_math::calc_quote_amount_sell_base(
+                quote_params.amount as u128,
+                woopool_a.as_ref().context("Missing woopool")?,
+                decimals_a.as_ref().context("Missing decimals_a")?,
+                state_a.as_ref().context("Missing state_a")?,
+            )?;
+    
+            quote_amount = _quote_amount;
         }
+
+        let swap_fee = checked_mul_div_round_up(quote_amount, self.fee_rate as u128, ONE_E5_U128)?;
+        quote_amount = quote_amount.checked_sub(swap_fee).ok_or(ErrorCode::MathOverflow)?;
+    
+        let mut to_amount = quote_amount;
+        if quote_params.output_mint != self.quote_mint {
+            let (_to_amount, _) = swap_math::calc_base_amount_sell_quote(
+                quote_amount,
+                woopool_b.as_ref().context("Missing woopool")?,
+                decimals_b.as_ref().context("Missing decimals_a")?,
+                state_b.as_ref().context("Missing state_a")?,
+            )?;
+            to_amount = _to_amount;
+        }
+    
+        Ok(Quote {
+            fee_pct: self.fee_rate.into(),
+            in_amount: quote_params.amount.try_into()?,
+            out_amount: to_amount as u64,
+            fee_amount: swap_fee as u64,
+            fee_mint: self.quote_mint,
+            ..Quote::default()
+        })
     }
     
     fn get_swap_and_account_metas(&self, swap_params: &SwapParams) -> Result<SwapAndAccountMetas> {

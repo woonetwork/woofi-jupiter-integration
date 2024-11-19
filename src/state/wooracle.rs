@@ -33,7 +33,7 @@
 
 use std::cmp::{max, min};
 
-use anyhow::{Error, Result};
+use anyhow::Result;
 use solana_sdk::sysvar::Sysvar;
 use crate::errors::ErrorCode;
 use crate::{util::checked_mul_div, constants::{ONE_E18_U128, ONE_E18_U64}};

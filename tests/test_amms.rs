@@ -1,20 +1,8 @@
-use std::collections::HashMap;
-
 use anyhow::{Context, Error};
 use jupiter_amm_interface::{AccountMap, Amm, AmmContext, ClockRef, KeyedAccount, QuoteParams, SwapMode};
 
-use solana_client::{
-    nonblocking::rpc_client::{RpcClient},
-    rpc_request::RpcRequest,
-    rpc_response::{Response, RpcKeyedAccount, RpcResponseContext},
-    rpc_sender::{RpcSender, RpcTransportStats},
-};
-use solana_program_test::{BanksClient, BanksClientError, ProgramTest, ProgramTestContext};
-use solana_sdk::{
-    account::Account, clock::Clock, compute_budget::ComputeBudgetInstruction,
-    instruction::Instruction, program_option::COption, program_pack::Pack, pubkey::Pubkey,
-    signature::Keypair, signer::Signer, sysvar, transaction::Transaction,
-};
+use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_sdk::{clock::Clock, sysvar};
 use woofi_jupiter::{util::SOL, util::USDC, WoofiSwap};
 
 #[tokio::test]
@@ -33,17 +21,6 @@ async fn test_jupiter_quote() -> Result<(), Error> {
     };
 
     let mut woofi_swap = WoofiSwap::from_keyed_account(&market_account, &amm_context).unwrap();
-    println!("woofi_swap.token_a_mint:{}", woofi_swap.token_a_mint);
-    println!("woofi_swap.token_a_wooracle:{}", woofi_swap.token_a_wooracle);
-    println!("woofi_swap.token_a_woopool:{}", woofi_swap.token_a_woopool);
-    println!("woofi_swap.token_a_feed_account:{}", woofi_swap.token_a_feed_account);
-    println!("woofi_swap.token_a_price_update:{}", woofi_swap.token_a_price_update);
-
-    println!("woofi_swap.token_b_mint:{}", woofi_swap.token_b_mint);
-    println!("woofi_swap.token_b_wooracle:{}", woofi_swap.token_b_wooracle);
-    println!("woofi_swap.token_b_woopool:{}", woofi_swap.token_b_woopool);
-    println!("woofi_swap.token_b_feed_account:{}", woofi_swap.token_b_feed_account);
-    println!("woofi_swap.token_b_price_update:{}", woofi_swap.token_b_price_update);
 
     let pubkeys = woofi_swap.get_accounts_to_update();
     let accounts_map: AccountMap = pubkeys
@@ -53,13 +30,28 @@ async fn test_jupiter_quote() -> Result<(), Error> {
         .collect();
 
     woofi_swap.update(&accounts_map)?;
-    let result = woofi_swap.quote(&QuoteParams{
-        amount: 1000,
+
+    let mut result = woofi_swap.quote(&QuoteParams{
+        amount: 10000000,
         input_mint: SOL,
         output_mint: USDC,
         swap_mode: SwapMode::ExactIn
     })?;
 
+    println!("Getting quote for selling 0.01 SOL");
+    println!("result.out_amount:{}", result.out_amount);
+    println!("result.in_amount:{}", result.in_amount);
+    println!("result.fee_amount:{}", result.fee_amount);
+    println!("result.fee_mint:{}", result.fee_mint);
+
+    result = woofi_swap.quote(&QuoteParams{
+        amount: 200000000,
+        input_mint: USDC,
+        output_mint: SOL,
+        swap_mode: SwapMode::ExactIn
+    })?;
+
+    println!("Getting quote for buying SOL using 200 USDC");
     println!("result.out_amount:{}", result.out_amount);
     println!("result.in_amount:{}", result.in_amount);
     println!("result.fee_amount:{}", result.fee_amount);
