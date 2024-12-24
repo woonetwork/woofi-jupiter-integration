@@ -10,7 +10,7 @@ impl Decimals {
         let price_dec = 10_u64.checked_pow(price)?;
         let quote_dec = 10_u64.checked_pow(quote)?;
         let base_dec = 10_u64.checked_pow(base)?;
-        
+
         Some(Decimals {
             price_dec,
             quote_dec,
