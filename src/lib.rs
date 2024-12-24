@@ -40,8 +40,8 @@ use state::{WooPool, Wooracle};
 use std::{cmp::max, convert::TryInto};
 use util::{
     checked_mul_div_round_up, get_price, get_wooconfig_address, get_woopool_address,
-    get_wooracle_address, swap_math, Decimals, GetStateResult, SOL, SOL_FEED_ACCOUNT,
-    SOL_PRICE_UPDATE, USDC, USDC_FEED_ACCOUNT, USDC_PRICE_UPDATE,
+    get_wooracle_address, swap_math, Decimals, GetStateResult, SOL, USDC,
+    get_pubkey_from_param,
 };
 
 use jupiter_amm_interface::{
@@ -53,7 +53,7 @@ use pyth_solana_receiver_sdk::price_update::PriceUpdateV2;
 
 mod constants;
 mod errors;
-mod state;
+pub mod state;
 pub mod util;
 
 #[cfg(feature = "devnet")]
@@ -99,14 +99,20 @@ impl Amm for WoofiSwap {
 
     fn from_keyed_account(keyed_account: &KeyedAccount, _amm_context: &AmmContext) -> Result<Self> {
         let program_id = id();
-        let quote_mint = USDC;
-        let token_a_mint = SOL;
-        let token_b_mint = USDC;
-        let token_a_feed_account = SOL_FEED_ACCOUNT;
-        let token_a_price_update = SOL_PRICE_UPDATE;
-        let token_b_feed_account = USDC_FEED_ACCOUNT;
-        let token_b_price_update = USDC_PRICE_UPDATE;
-        let quote_price_update = USDC_PRICE_UPDATE;
+
+        let woopool = & WooPool::try_deserialize(&mut keyed_account.account.data.as_slice())?;
+
+        let quote_mint = woopool.quote_token_mint;
+        let token_a_mint = woopool.token_mint;
+        let token_b_mint = woopool.quote_token_mint;
+
+        let params = keyed_account.params.as_ref().context("missing keyed account params")?;
+        let param_map = params.as_object().context("keyed account params is not correct")?;
+        let token_a_feed_account = get_pubkey_from_param(param_map, "token_a_feed_account".to_string())?;
+        let token_a_price_update = get_pubkey_from_param(param_map, "token_a_price_update".to_string())?;
+        let token_b_feed_account = get_pubkey_from_param(param_map, "token_b_feed_account".to_string())?;
+        let token_b_price_update = get_pubkey_from_param(param_map, "token_b_price_update".to_string())?;
+        let quote_price_update = get_pubkey_from_param(param_map, "quote_price_update".to_string())?;
         let wooconfig = get_wooconfig_address(&program_id).0;
         let token_a_wooracle = get_wooracle_address(
             &wooconfig,
