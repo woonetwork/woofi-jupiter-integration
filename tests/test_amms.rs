@@ -1,6 +1,8 @@
 use anchor_lang::AccountDeserialize;
 use anyhow::{Context, Error};
-use jupiter_amm_interface::{AccountMap, Amm, AmmContext, ClockRef, KeyedAccount, QuoteParams, SwapMode};
+use jupiter_amm_interface::{
+    AccountMap, Amm, AmmContext, ClockRef, KeyedAccount, QuoteParams, SwapMode,
+};
 
 use serde_json::json;
 use solana_client::{ nonblocking::rpc_client::RpcClient};
@@ -10,7 +12,6 @@ use woofi_jupiter::{state::{WooPool, Wooracle}, util::{get_wooconfig_address, ge
 #[tokio::test]
 // TODO replace with local accounts
 async fn test_jupiter_quote() -> Result<(), Error> {
-
     // devnet
     //let client = RpcClient::new("https://api.devnet.solana.com".to_string());
     let client = RpcClient::new("https://api.mainnet-beta.solana.com".to_string());
@@ -65,11 +66,11 @@ async fn test_jupiter_quote() -> Result<(), Error> {
 
     woofi_swap.update(&accounts_map)?;
 
-    let mut result = woofi_swap.quote(&QuoteParams{
+    let mut result = woofi_swap.quote(&QuoteParams {
         amount: 10000000,
         input_mint: SOL,
         output_mint: USDC,
-        swap_mode: SwapMode::ExactIn
+        swap_mode: SwapMode::ExactIn,
     })?;
 
     println!("Getting quote for selling 0.01 SOL");
@@ -78,11 +79,11 @@ async fn test_jupiter_quote() -> Result<(), Error> {
     println!("result.fee_amount:{}", result.fee_amount);
     println!("result.fee_mint:{}", result.fee_mint);
 
-    result = woofi_swap.quote(&QuoteParams{
+    result = woofi_swap.quote(&QuoteParams {
         amount: 200000000,
         input_mint: USDC,
         output_mint: SOL,
-        swap_mode: SwapMode::ExactIn
+        swap_mode: SwapMode::ExactIn,
     })?;
 
     println!("Getting quote for buying SOL using 200 USDC");
@@ -106,7 +107,8 @@ pub async fn get_wooracle(woopool_pubkey: Pubkey, client: &RpcClient) -> anyhow:
 
 pub async fn get_clock(rpc_client: &RpcClient) -> anyhow::Result<Clock> {
     let clock_data = rpc_client
-        .get_account_with_commitment(&sysvar::clock::ID, rpc_client.commitment()).await?
+        .get_account_with_commitment(&sysvar::clock::ID, rpc_client.commitment())
+        .await?
         .value
         .context("Failed to get clock account")?;
 
