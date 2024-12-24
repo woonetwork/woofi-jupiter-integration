@@ -50,7 +50,9 @@ async fn test_jupiter_quote() -> Result<(), Error> {
     let amm_context = get_amm_context(&client).await?;
 
     let market_account = KeyedAccount {
-        key: woofi_jupiter::id(),
+        key: Pubkey::find_program_address(&[b"woofi_jupiter", 
+                    token_a_mint.as_ref(), token_b_mint.as_ref(),
+                    quote_mint.as_ref()], &program_id).0,
         account,
         params: Some(keyed_account_params),
     };
