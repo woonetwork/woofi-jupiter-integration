@@ -5,7 +5,7 @@ use jupiter_amm_interface::{
 };
 
 use serde_json::json;
-use solana_client::{ nonblocking::rpc_client::RpcClient};
+use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{clock::Clock, pubkey::Pubkey, sysvar};
 use woofi_jupiter::{state::{WooPool, Wooracle}, util::{get_wooconfig_address, get_woopool_address, SOL, USDC}, WoofiSwap};
 
@@ -45,17 +45,15 @@ async fn test_jupiter_quote() -> Result<(), Error> {
         "quote_price_update": quote_wooracle.price_update.to_string(),
     });
 
-    let account = client.get_account(&program_id).await?;
-
-    let amm_context = get_amm_context(&client).await?;
-
+    let sol_usdc_market = get_woopool_address(&wooconfig, &SOL, &USDC, &program_id).0;
+    let account = client.get_account(&sol_usdc_market).await?;
     let market_account = KeyedAccount {
-        key: Pubkey::find_program_address(&[b"woofi_jupiter", 
-                    token_a_mint.as_ref(), token_b_mint.as_ref(),
-                    quote_mint.as_ref()], &program_id).0,
+        key: sol_usdc_market,
         account,
         params: Some(keyed_account_params),
     };
+
+    let amm_context = get_amm_context(&client).await?;
 
     let mut woofi_swap = WoofiSwap::from_keyed_account(&market_account, &amm_context).unwrap();
 

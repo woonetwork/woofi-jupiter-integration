@@ -99,9 +99,12 @@ impl Amm for WoofiSwap {
 
     fn from_keyed_account(keyed_account: &KeyedAccount, _amm_context: &AmmContext) -> Result<Self> {
         let program_id = id();
-        let quote_mint = USDC;
-        let token_a_mint = SOL;
-        let token_b_mint = USDC;
+
+        let woopool = & WooPool::try_deserialize(&mut keyed_account.account.data.as_slice())?;
+
+        let quote_mint = woopool.quote_token_mint;
+        let token_a_mint = woopool.token_mint;
+        let token_b_mint = woopool.quote_token_mint;
 
         let params = keyed_account.params.as_ref().context("missing keyed account params")?;
         let param_map = params.as_object().context("keyed account params is not correct")?;
