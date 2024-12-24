@@ -1,9 +1,11 @@
+use anchor_lang::AccountDeserialize;
 use anyhow::{Context, Error};
 use jupiter_amm_interface::{AccountMap, Amm, AmmContext, ClockRef, KeyedAccount, QuoteParams, SwapMode};
 
-use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::{clock::Clock, sysvar};
-use woofi_jupiter::{util::SOL, util::USDC, WoofiSwap};
+use serde_json::json;
+use solana_client::{ nonblocking::rpc_client::RpcClient};
+use solana_sdk::{clock::Clock, pubkey::Pubkey, sysvar};
+use woofi_jupiter::{state::{WooPool, Wooracle}, util::{get_wooconfig_address, get_woopool_address, SOL, USDC}, WoofiSwap};
 
 #[tokio::test]
 // TODO replace with local accounts
@@ -12,15 +14,44 @@ async fn test_jupiter_quote() -> Result<(), Error> {
     // devnet
     //let client = RpcClient::new("https://api.devnet.solana.com".to_string());
     let client = RpcClient::new("https://api.mainnet-beta.solana.com".to_string());
+
+    let program_id = woofi_jupiter::id();
     
-    let account = client.get_account(&woofi_jupiter::id()).await?;
+    let quote_mint = USDC;
+    let token_a_mint = SOL;
+    let token_b_mint = USDC;
+
+    let wooconfig = get_wooconfig_address(&program_id).0;
+    let token_a_woopool_pubkey = get_woopool_address(&wooconfig, &token_a_mint, &quote_mint, &program_id).0;
+    let (token_a_wooracle_pubkey, token_a_wooracle) = get_wooracle(token_a_woopool_pubkey, &client).await?;
+    
+    let token_b_woopool_pubkey = get_woopool_address(&wooconfig, &token_b_mint, &quote_mint, &program_id).0;
+    let (token_b_wooracle_pubkey, token_b_wooracle) = get_wooracle(token_b_woopool_pubkey, &client).await?;
+
+    let quote_pool_pubkey = get_woopool_address(&wooconfig, &quote_mint, &quote_mint, &program_id).0;
+    let (_, quote_wooracle) = get_wooracle(quote_pool_pubkey, &client).await?;
+
+    let keyed_account_params = json!({ 
+        "token_a_wooracle": token_a_wooracle_pubkey.to_string(),
+        "token_a_woopool": token_a_woopool_pubkey.to_string(),
+        "token_a_feed_account": token_a_wooracle.feed_account.to_string(),
+        "token_a_price_update": token_a_wooracle.price_update.to_string(),
+        "token_b_wooracle": token_b_wooracle_pubkey.to_string(),
+        "token_b_woopool": token_b_woopool_pubkey.to_string(),
+        "token_b_feed_account": token_b_wooracle.feed_account.to_string(),
+        "token_b_price_update": token_b_wooracle.price_update.to_string(),
+        "quote_pool": quote_pool_pubkey.to_string(),
+        "quote_price_update": quote_wooracle.price_update.to_string(),
+    });
+
+    let account = client.get_account(&program_id).await?;
 
     let amm_context = get_amm_context(&client).await?;
 
     let market_account = KeyedAccount {
         key: woofi_jupiter::id(),
         account,
-        params: None,
+        params: Some(keyed_account_params),
     };
 
     let mut woofi_swap = WoofiSwap::from_keyed_account(&market_account, &amm_context).unwrap();
@@ -61,6 +92,16 @@ async fn test_jupiter_quote() -> Result<(), Error> {
     println!("result.fee_mint:{}", result.fee_mint);
 
     Ok(())
+}
+
+pub async fn get_wooracle(woopool_pubkey: Pubkey, client: &RpcClient) -> anyhow::Result<(Pubkey, Wooracle)> {
+    let woopool_data = client.get_account(&woopool_pubkey).await?;
+    let woopool = & WooPool::try_deserialize(&mut woopool_data.data.as_slice())?;
+    let wooracle_pubkey = woopool.wooracle;
+    let wooracle_data = client.get_account(&wooracle_pubkey).await?;
+    let wooracle = Wooracle::try_deserialize(&mut wooracle_data.data.as_slice())?;
+
+    Ok((wooracle_pubkey, wooracle))
 }
 
 pub async fn get_clock(rpc_client: &RpcClient) -> anyhow::Result<Clock> {

@@ -36,7 +36,7 @@ use anyhow::{Context, Result};
 use constants::ONE_E5_U128;
 use errors::ErrorCode;
 use state::{WooPool, Wooracle};
-use util::{checked_mul_div_round_up, get_price, get_wooconfig_address, get_woopool_address, get_wooracle_address, swap_math, Decimals, GetStateResult, SOL, SOL_FEED_ACCOUNT, SOL_PRICE_UPDATE, USDC, USDC_FEED_ACCOUNT, USDC_PRICE_UPDATE};
+use util::{checked_mul_div_round_up, get_price, get_pubkey_from_param, get_wooconfig_address, get_woopool_address, get_wooracle_address, swap_math, Decimals, GetStateResult, SOL, USDC};
 use std::{cmp::max, convert::TryInto};
 use solana_sdk::{clock::Clock, pubkey::Pubkey, sysvar};
 
@@ -48,7 +48,7 @@ use pyth_solana_receiver_sdk::price_update::PriceUpdateV2;
 
 mod constants;
 mod errors;
-mod state;
+pub mod state;
 pub mod util;
 
 #[cfg(feature = "devnet")]
@@ -97,11 +97,14 @@ impl Amm for WoofiSwap {
         let quote_mint = USDC;
         let token_a_mint = SOL;
         let token_b_mint = USDC;
-        let token_a_feed_account = SOL_FEED_ACCOUNT;
-        let token_a_price_update = SOL_PRICE_UPDATE;
-        let token_b_feed_account = USDC_FEED_ACCOUNT;
-        let token_b_price_update = USDC_PRICE_UPDATE;
-        let quote_price_update = USDC_PRICE_UPDATE;
+
+        let params = keyed_account.params.as_ref().context("missing keyed account params")?;
+        let param_map = params.as_object().context("keyed account params is not correct")?;
+        let token_a_feed_account = get_pubkey_from_param(param_map, "token_a_feed_account".to_string())?;
+        let token_a_price_update = get_pubkey_from_param(param_map, "token_a_price_update".to_string())?;
+        let token_b_feed_account = get_pubkey_from_param(param_map, "token_b_feed_account".to_string())?;
+        let token_b_price_update = get_pubkey_from_param(param_map, "token_b_price_update".to_string())?;
+        let quote_price_update = get_pubkey_from_param(param_map, "quote_price_update".to_string())?;
         let wooconfig = get_wooconfig_address(&program_id).0;
         let token_a_wooracle = get_wooracle_address(&wooconfig, &token_a_mint, &token_a_feed_account, &token_a_price_update, &program_id).0;
         let token_b_wooracle = get_wooracle_address(&wooconfig, &token_b_mint, &token_b_feed_account, &token_b_price_update, &program_id).0;

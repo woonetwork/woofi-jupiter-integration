@@ -7756,6 +7756,8 @@ dependencies = [
  "jupiter-amm-interface",
  "paste",
  "pyth-solana-receiver-sdk",
+ "serde",
+ "serde_json",
  "solana-account-decoder",
  "solana-client",
  "solana-logger",
