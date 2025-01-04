@@ -36,12 +36,11 @@ use anyhow::{Context, Result};
 use constants::ONE_E5_U128;
 use errors::ErrorCode;
 use solana_sdk::{clock::Clock, pubkey::Pubkey, sysvar};
-use state::{WooPool, Wooracle};
+use state::{WooPool, WooSwap, Wooracle};
 use std::{cmp::max, convert::TryInto};
 use util::{
-    checked_mul_div_round_up, get_price, get_wooconfig_address, get_woopool_address,
-    get_wooracle_address, swap_math, Decimals, GetStateResult, SOL, USDC,
-    get_pubkey_from_param,
+    checked_mul_div_round_up, get_price,
+    swap_math, Decimals, GetStateResult,
 };
 
 use jupiter_amm_interface::{
@@ -100,41 +99,25 @@ impl Amm for WoofiSwap {
     fn from_keyed_account(keyed_account: &KeyedAccount, _amm_context: &AmmContext) -> Result<Self> {
         let program_id = id();
 
-        let woopool = & WooPool::try_deserialize(&mut keyed_account.account.data.as_slice())?;
+        let wooswap = &WooSwap::try_deserialize(&mut keyed_account.account.data.as_slice())?;
 
-        let quote_mint = woopool.quote_token_mint;
-        let token_a_mint = woopool.token_mint;
-        let token_b_mint = woopool.quote_token_mint;
+        let wooconfig = wooswap.wooconfig;
+        let token_a_mint = wooswap.token_mint_a;
+        let token_a_wooracle = wooswap.wooracle_a;
+        let token_a_woopool = wooswap.woopool_a;
+        let token_a_feed_account = wooswap.feed_account_a;
+        let token_a_price_update = wooswap.price_update_a;
+        
+        let token_b_mint = wooswap.token_mint_b;
+        let token_b_wooracle = wooswap.wooracle_b;
+        let token_b_woopool = wooswap.woopool_b;
+        let token_b_feed_account = wooswap.feed_account_b;
+        let token_b_price_update = wooswap.price_update_b;
 
-        let params = keyed_account.params.as_ref().context("missing keyed account params")?;
-        let param_map = params.as_object().context("keyed account params is not correct")?;
-        let token_a_feed_account = get_pubkey_from_param(param_map, "token_a_feed_account".to_string())?;
-        let token_a_price_update = get_pubkey_from_param(param_map, "token_a_price_update".to_string())?;
-        let token_b_feed_account = get_pubkey_from_param(param_map, "token_b_feed_account".to_string())?;
-        let token_b_price_update = get_pubkey_from_param(param_map, "token_b_price_update".to_string())?;
-        let quote_price_update = get_pubkey_from_param(param_map, "quote_price_update".to_string())?;
-        let wooconfig = get_wooconfig_address(&program_id).0;
-        let token_a_wooracle = get_wooracle_address(
-            &wooconfig,
-            &token_a_mint,
-            &token_a_feed_account,
-            &token_a_price_update,
-            &program_id,
-        )
-        .0;
-        let token_b_wooracle = get_wooracle_address(
-            &wooconfig,
-            &token_b_mint,
-            &token_b_feed_account,
-            &token_b_price_update,
-            &program_id,
-        )
-        .0;
-        let token_a_woopool =
-            get_woopool_address(&wooconfig, &token_a_mint, &quote_mint, &program_id).0;
-        let token_b_woopool =
-            get_woopool_address(&wooconfig, &token_b_mint, &quote_mint, &program_id).0;
-        let quote_pool = get_woopool_address(&wooconfig, &quote_mint, &quote_mint, &program_id).0;
+        let quote_mint = wooswap.quote_token_mint;
+        let quote_price_update = wooswap.quote_price_update;
+        let quote_pool = wooswap.quote_feed_account;
+
         Ok(WoofiSwap {
             key: keyed_account.key,
             label: "WoofiSwap".into(),
