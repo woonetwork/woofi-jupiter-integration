@@ -1,12 +1,11 @@
-use anchor_lang::AccountDeserialize;
 use anyhow::{Context, Error};
 use jupiter_amm_interface::{
     AccountMap, Amm, AmmContext, ClockRef, KeyedAccount, QuoteParams, SwapMode,
 };
 
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::{clock::Clock, pubkey::Pubkey, sysvar};
-use woofi_jupiter::{state::{WooPool, Wooracle}, util::{get_wooconfig_address, get_woopool_address, get_wooswap_address, SOL, USDC}, WoofiSwap};
+use solana_sdk::{clock::Clock, sysvar};
+use woofi_jupiter::{util::{get_wooconfig_address, get_wooswap_address, SOL, USDC}, WoofiSwap};
 
 #[tokio::test]
 // TODO replace with local accounts
@@ -28,10 +27,9 @@ async fn test_jupiter_quote() -> Result<(), Error> {
                               &program_id
                           ).0;
 
-    let sol_usdc_market = get_woopool_address(&wooconfig, &SOL, &USDC, &program_id).0;
     let account = client.get_account(&wooswap).await?;
     let market_account = KeyedAccount {
-        key: sol_usdc_market,
+        key: wooswap,
         account,
         params: None,
     };
@@ -76,19 +74,6 @@ async fn test_jupiter_quote() -> Result<(), Error> {
     println!("result.fee_mint:{}", result.fee_mint);
 
     Ok(())
-}
-
-pub async fn get_wooracle(
-    woopool_pubkey: Pubkey,
-    client: &RpcClient,
-) -> anyhow::Result<(Pubkey, Wooracle)> {
-    let woopool_data = client.get_account(&woopool_pubkey).await?;
-    let woopool = &WooPool::try_deserialize(&mut woopool_data.data.as_slice())?;
-    let wooracle_pubkey = woopool.wooracle;
-    let wooracle_data = client.get_account(&wooracle_pubkey).await?;
-    let wooracle = Wooracle::try_deserialize(&mut wooracle_data.data.as_slice())?;
-
-    Ok((wooracle_pubkey, wooracle))
 }
 
 pub async fn get_clock(rpc_client: &RpcClient) -> anyhow::Result<Clock> {
