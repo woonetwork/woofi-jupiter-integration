@@ -23,8 +23,8 @@ pub fn get_woopool_address(wooconfig: &Pubkey, token_mint: &Pubkey, quote_token_
     Pubkey::find_program_address(&[b"woopool", wooconfig.as_ref(), token_mint.as_ref(), quote_token_mint.as_ref()], program_id)
 }
 
-pub fn get_wooswap_address(wooconfig: &Pubkey, token_mint_a: &Pubkey, token_mint_b: &Pubkey, program_id: &Pubkey) -> (Pubkey, u8) {
-    Pubkey::find_program_address(&[b"wooswap", wooconfig.as_ref(), token_mint_a.as_ref(), token_mint_b.as_ref()], program_id)
+pub fn get_wooammpool_address(wooconfig: &Pubkey, token_mint_a: &Pubkey, token_mint_b: &Pubkey, program_id: &Pubkey) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[b"wooammpool", wooconfig.as_ref(), token_mint_a.as_ref(), token_mint_b.as_ref()], program_id)
 }
 
 pub fn get_pubkey_from_param(param_map: &Map<String, Value>, key: String) -> Result<Pubkey> {
