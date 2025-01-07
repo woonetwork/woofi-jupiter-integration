@@ -38,7 +38,7 @@ use anchor_lang::prelude::*;
 #[derive(InitSpace)]
 pub struct WooAmmPool {
     pub wooconfig: Pubkey,
-    pub wooswap_bump: [u8; 1],
+    pub wooammpool_bump: [u8; 1],
     pub authority: Pubkey,
     pub wooracle_a: Pubkey,
     pub woopool_a: Pubkey,
@@ -64,7 +64,7 @@ impl WooAmmPool {
             self.wooconfig.as_ref(),
             self.token_mint_a.as_ref(),
             self.token_mint_b.as_ref(),
-            self.wooswap_bump.as_ref(),
+            self.wooammpool_bump.as_ref(),
         ]
     }
 
@@ -90,7 +90,7 @@ impl WooAmmPool {
         quote_feed_account: Pubkey,
         quote_price_update: Pubkey,    
     ) -> Result<()> {
-        self.wooswap_bump = [bump];
+        self.wooammpool_bump = [bump];
         self.wooconfig = wooconfig;
         self.authority = authority;
         self.wooracle_a = wooracle_a;
