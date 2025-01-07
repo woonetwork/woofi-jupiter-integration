@@ -36,7 +36,7 @@ use anchor_lang::prelude::*;
 
 #[account]
 #[derive(InitSpace)]
-pub struct WooSwap {
+pub struct WooAmmPool {
     pub wooconfig: Pubkey,
     pub wooswap_bump: [u8; 1],
     pub authority: Pubkey,
@@ -57,10 +57,10 @@ pub struct WooSwap {
     pub quote_price_update: Pubkey,
 }
 
-impl WooSwap {
+impl WooAmmPool {
     pub fn seeds(&self) -> [&[u8]; 5] {
         [
-            WOOSWAP_SEED.as_bytes(),
+            WOOAMMPOOL_SEED.as_bytes(),
             self.wooconfig.as_ref(),
             self.token_mint_a.as_ref(),
             self.token_mint_b.as_ref(),

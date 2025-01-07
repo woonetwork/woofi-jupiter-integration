@@ -36,7 +36,7 @@ use anyhow::{Context, Result};
 use constants::ONE_E5_U128;
 use errors::ErrorCode;
 use solana_sdk::{clock::Clock, pubkey::Pubkey, sysvar};
-use state::{WooPool, WooSwap, Wooracle};
+use state::{WooPool, WooAmmPool, Wooracle};
 use std::{cmp::max, convert::TryInto};
 use util::{
     checked_mul_div_round_up, get_price,
@@ -99,24 +99,24 @@ impl Amm for WoofiSwap {
     fn from_keyed_account(keyed_account: &KeyedAccount, _amm_context: &AmmContext) -> Result<Self> {
         let program_id = id();
 
-        let wooswap = &WooSwap::try_deserialize(&mut keyed_account.account.data.as_slice())?;
+        let woo_amm_pool = &WooAmmPool::try_deserialize(&mut keyed_account.account.data.as_slice())?;
 
-        let wooconfig = wooswap.wooconfig;
-        let token_a_mint = wooswap.token_mint_a;
-        let token_a_wooracle = wooswap.wooracle_a;
-        let token_a_woopool = wooswap.woopool_a;
-        let token_a_feed_account = wooswap.feed_account_a;
-        let token_a_price_update = wooswap.price_update_a;
+        let wooconfig = woo_amm_pool.wooconfig;
+        let token_a_mint = woo_amm_pool.token_mint_a;
+        let token_a_wooracle = woo_amm_pool.wooracle_a;
+        let token_a_woopool = woo_amm_pool.woopool_a;
+        let token_a_feed_account = woo_amm_pool.feed_account_a;
+        let token_a_price_update = woo_amm_pool.price_update_a;
         
-        let token_b_mint = wooswap.token_mint_b;
-        let token_b_wooracle = wooswap.wooracle_b;
-        let token_b_woopool = wooswap.woopool_b;
-        let token_b_feed_account = wooswap.feed_account_b;
-        let token_b_price_update = wooswap.price_update_b;
+        let token_b_mint = woo_amm_pool.token_mint_b;
+        let token_b_wooracle = woo_amm_pool.wooracle_b;
+        let token_b_woopool = woo_amm_pool.woopool_b;
+        let token_b_feed_account = woo_amm_pool.feed_account_b;
+        let token_b_price_update = woo_amm_pool.price_update_b;
 
-        let quote_mint = wooswap.quote_token_mint;
-        let quote_price_update = wooswap.quote_price_update;
-        let quote_pool = wooswap.quote_feed_account;
+        let quote_mint = woo_amm_pool.quote_token_mint;
+        let quote_price_update = woo_amm_pool.quote_price_update;
+        let quote_pool = woo_amm_pool.quote_feed_account;
 
         Ok(WoofiSwap {
             key: keyed_account.key,

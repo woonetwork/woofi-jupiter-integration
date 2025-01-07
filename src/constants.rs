@@ -1,7 +1,7 @@
 pub const WOORACLE_SEED: &str = "wooracle";
 pub const WOOPOOL_SEED: &str = "woopool";
 pub const WOOCONFIG_SEED: &str = "wooconfig";
-pub const WOOSWAP_SEED: &str = "wooswap";
+pub const WOOAMMPOOL_SEED: &str = "wooammpool";
 
 pub const ONE_E5_U128: u128 = 100_000;
 pub const ONE_E18_U64: u64 = 1_000_000_000_000_000_000;
