@@ -59,7 +59,7 @@ pub mod util;
 declare_id!("Es677W33uwrXLSqjV3rqcz5sftyarupdV3vDpQ9LXGow");
 
 #[cfg(not(feature = "devnet"))]
-declare_id!("WooFiGFK9x5FBYdvMg3pJBpAkPA8EEYiLcopwrxJvDG");
+declare_id!("woofiCKJyDKxswhzu98HRW2v52AfjBKHkKtHEzV4ncV");
 
 #[derive(Clone)]
 pub struct WoofiSwap {
