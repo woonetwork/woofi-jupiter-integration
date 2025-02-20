@@ -5,7 +5,7 @@ use jupiter_amm_interface::{
 
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{clock::Clock, sysvar};
-use woofi_jupiter::{util::SOL, util::USDC, WoofiSwap};
+use woofi_jupiter::{util::{get_wooammpool_address, get_wooconfig_address, SOL, USDC}, WoofiSwap};
 
 #[tokio::test]
 // TODO replace with local accounts
@@ -14,15 +14,27 @@ async fn test_jupiter_quote() -> Result<(), Error> {
     //let client = RpcClient::new("https://api.devnet.solana.com".to_string());
     let client = RpcClient::new("https://api.mainnet-beta.solana.com".to_string());
 
-    let account = client.get_account(&woofi_jupiter::id()).await?;
+    let program_id = woofi_jupiter::id();
+    
+    let token_mint_a = SOL;
+    let token_mint_b = USDC;
 
-    let amm_context = get_amm_context(&client).await?;
+    let wooconfig = get_wooconfig_address(&program_id).0;
+    let wooammpool = get_wooammpool_address(
+                              &wooconfig,
+                              &token_mint_a,
+                              &token_mint_b,
+                              &program_id
+                          ).0;
 
+    let account = client.get_account(&wooammpool).await?;
     let market_account = KeyedAccount {
-        key: woofi_jupiter::id(),
+        key: wooammpool,
         account,
         params: None,
     };
+
+    let amm_context = get_amm_context(&client).await?;
 
     let mut woofi_swap = WoofiSwap::from_keyed_account(&market_account, &amm_context).unwrap();
 

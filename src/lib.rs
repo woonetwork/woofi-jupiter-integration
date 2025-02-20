@@ -36,12 +36,11 @@ use anyhow::{Context, Result};
 use constants::ONE_E5_U128;
 use errors::ErrorCode;
 use solana_sdk::{clock::Clock, pubkey::Pubkey, sysvar};
-use state::{WooPool, Wooracle};
+use state::{WooPool, WooAmmPool, Wooracle};
 use std::{cmp::max, convert::TryInto};
 use util::{
-    checked_mul_div_round_up, get_price, get_wooconfig_address, get_woopool_address,
-    get_wooracle_address, swap_math, Decimals, GetStateResult, SOL, SOL_FEED_ACCOUNT,
-    SOL_PRICE_UPDATE, USDC, USDC_FEED_ACCOUNT, USDC_PRICE_UPDATE,
+    checked_mul_div_round_up, get_price,
+    swap_math, Decimals, GetStateResult,
 };
 
 use jupiter_amm_interface::{
@@ -53,14 +52,14 @@ use pyth_solana_receiver_sdk::price_update::PriceUpdateV2;
 
 mod constants;
 mod errors;
-mod state;
+pub mod state;
 pub mod util;
 
 #[cfg(feature = "devnet")]
 declare_id!("Es677W33uwrXLSqjV3rqcz5sftyarupdV3vDpQ9LXGow");
 
 #[cfg(not(feature = "devnet"))]
-declare_id!("WooFiGFK9x5FBYdvMg3pJBpAkPA8EEYiLcopwrxJvDG");
+declare_id!("woofiCKJyDKxswhzu98HRW2v52AfjBKHkKtHEzV4ncV");
 
 #[derive(Clone)]
 pub struct WoofiSwap {
@@ -99,36 +98,26 @@ impl Amm for WoofiSwap {
 
     fn from_keyed_account(keyed_account: &KeyedAccount, _amm_context: &AmmContext) -> Result<Self> {
         let program_id = id();
-        let quote_mint = USDC;
-        let token_a_mint = SOL;
-        let token_b_mint = USDC;
-        let token_a_feed_account = SOL_FEED_ACCOUNT;
-        let token_a_price_update = SOL_PRICE_UPDATE;
-        let token_b_feed_account = USDC_FEED_ACCOUNT;
-        let token_b_price_update = USDC_PRICE_UPDATE;
-        let quote_price_update = USDC_PRICE_UPDATE;
-        let wooconfig = get_wooconfig_address(&program_id).0;
-        let token_a_wooracle = get_wooracle_address(
-            &wooconfig,
-            &token_a_mint,
-            &token_a_feed_account,
-            &token_a_price_update,
-            &program_id,
-        )
-        .0;
-        let token_b_wooracle = get_wooracle_address(
-            &wooconfig,
-            &token_b_mint,
-            &token_b_feed_account,
-            &token_b_price_update,
-            &program_id,
-        )
-        .0;
-        let token_a_woopool =
-            get_woopool_address(&wooconfig, &token_a_mint, &quote_mint, &program_id).0;
-        let token_b_woopool =
-            get_woopool_address(&wooconfig, &token_b_mint, &quote_mint, &program_id).0;
-        let quote_pool = get_woopool_address(&wooconfig, &quote_mint, &quote_mint, &program_id).0;
+
+        let woo_amm_pool = &WooAmmPool::try_deserialize(&mut keyed_account.account.data.as_slice())?;
+
+        let wooconfig = woo_amm_pool.wooconfig;
+        let token_a_mint = woo_amm_pool.token_mint_a;
+        let token_a_wooracle = woo_amm_pool.wooracle_a;
+        let token_a_woopool = woo_amm_pool.woopool_a;
+        let token_a_feed_account = woo_amm_pool.feed_account_a;
+        let token_a_price_update = woo_amm_pool.price_update_a;
+        
+        let token_b_mint = woo_amm_pool.token_mint_b;
+        let token_b_wooracle = woo_amm_pool.wooracle_b;
+        let token_b_woopool = woo_amm_pool.woopool_b;
+        let token_b_feed_account = woo_amm_pool.feed_account_b;
+        let token_b_price_update = woo_amm_pool.price_update_b;
+
+        let quote_mint = woo_amm_pool.quote_token_mint;
+        let quote_price_update = woo_amm_pool.quote_price_update;
+        let quote_pool = woo_amm_pool.quote_feed_account;
+
         Ok(WoofiSwap {
             key: keyed_account.key,
             label: "WoofiSwap".into(),
