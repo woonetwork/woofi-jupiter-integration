@@ -331,9 +331,11 @@ impl Amm for WoofiSwap {
             AccountMeta::new(self.quote_pool, false),
             AccountMeta::new(self.quote_price_update, false),
             AccountMeta::new(quote_vault, false),
-            //            AccountMeta::new(self.rebate_to, false),
+            // TODO: confirm with Jupiter about the rebate address
+            // AccountMeta::new(self.rebate_to, false),
         ];
 
+        // TODO: uncomment this part in prod
         // Ok(SwapAndAccountMetas {
         //     swap: Swap::WoofiSwap,
         //     account_metas
