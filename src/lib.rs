@@ -65,7 +65,7 @@ declare_id!("woofiCKJyDKxswhzu98HRW2v52AfjBKHkKtHEzV4ncV");
 pub struct WoofiSwap {
     pub key: Pubkey,
     pub label: String,
-    pub quote_mint: Pubkey,
+    pub usdc_mint: Pubkey,
     pub token_a_mint: Pubkey,
     pub token_b_mint: Pubkey,
     pub program_id: Pubkey,
@@ -73,14 +73,18 @@ pub struct WoofiSwap {
     pub wooconfig: Pubkey,
     pub token_a_wooracle: Pubkey,
     pub token_a_woopool: Pubkey,
+    pub token_a_vault: Pubkey,
     pub token_a_feed_account: Pubkey,
     pub token_a_price_update: Pubkey,
     pub token_b_wooracle: Pubkey,
     pub token_b_woopool: Pubkey,
+    pub token_b_vault: Pubkey,
     pub token_b_feed_account: Pubkey,
     pub token_b_price_update: Pubkey,
-    pub quote_pool: Pubkey,
-    pub quote_price_update: Pubkey,
+    pub usdc_feed_account: Pubkey,
+    pub usdc_price_update: Pubkey,
+    pub usdc_woopool: Pubkey,
+    pub usdc_vault: Pubkey,
 
     pub fee_rate: u16,
     pub decimals_a: Option<Decimals>,
@@ -105,37 +109,45 @@ impl Amm for WoofiSwap {
         let token_a_mint = woo_amm_pool.token_mint_a;
         let token_a_wooracle = woo_amm_pool.wooracle_a;
         let token_a_woopool = woo_amm_pool.woopool_a;
+        let token_a_vault = woo_amm_pool.token_vault_a;
         let token_a_feed_account = woo_amm_pool.feed_account_a;
         let token_a_price_update = woo_amm_pool.price_update_a;
         
         let token_b_mint = woo_amm_pool.token_mint_b;
         let token_b_wooracle = woo_amm_pool.wooracle_b;
         let token_b_woopool = woo_amm_pool.woopool_b;
+        let token_b_vault = woo_amm_pool.token_vault_b;
         let token_b_feed_account = woo_amm_pool.feed_account_b;
         let token_b_price_update = woo_amm_pool.price_update_b;
 
-        let quote_mint = woo_amm_pool.quote_token_mint;
-        let quote_price_update = woo_amm_pool.quote_price_update;
-        let quote_pool = woo_amm_pool.quote_feed_account;
+        let usdc_mint = woo_amm_pool.quote_token_mint;
+        let usdc_price_update = woo_amm_pool.quote_price_update;
+        let usdc_feed_account = woo_amm_pool.quote_feed_account;
+        let usdc_woopool = woo_amm_pool.quote_woopool;
+        let usdc_vault = woo_amm_pool.quote_vault;
 
         Ok(WoofiSwap {
             key: keyed_account.key,
             label: "WoofiSwap".into(),
             program_id,
-            quote_mint,
+            usdc_mint,
             token_a_mint,
             token_b_mint,
             wooconfig,
             token_a_wooracle,
             token_a_woopool,
+            token_a_vault,
             token_a_feed_account,
             token_a_price_update,
             token_b_wooracle,
             token_b_woopool,
+            token_b_vault,
             token_b_feed_account,
             token_b_price_update,
-            quote_price_update,
-            quote_pool,
+            usdc_price_update,
+            usdc_feed_account,
+            usdc_woopool,
+            usdc_vault,
             fee_rate: 0,
             decimals_a: None,
             state_a: None,
@@ -194,7 +206,7 @@ impl Amm for WoofiSwap {
         let token_b_price_update = &mut PriceUpdateV2::try_deserialize(token_b_price_update_data)?;
 
         let quote_price_update_data =
-            &mut try_get_account_data(account_map, &self.quote_price_update)?;
+            &mut try_get_account_data(account_map, &self.usdc_price_update)?;
         let quote_price_update = &mut PriceUpdateV2::try_deserialize(quote_price_update_data)?;
 
         let clock: Clock = match account_map.get(&sysvar::clock::ID) {
@@ -203,9 +215,9 @@ impl Amm for WoofiSwap {
             None => Clock::default(), // some amms don't have clock snapshot
         };
 
-        let fee_rate: u16 = if self.token_a_mint == self.quote_mint {
+        let fee_rate: u16 = if self.token_a_mint == self.usdc_mint {
             token_b_woopool.fee_rate
-        } else if self.token_b_mint == self.quote_mint {
+        } else if self.token_b_mint == self.usdc_mint {
             token_a_woopool.fee_rate
         } else {
             max(token_a_woopool.fee_rate, token_b_woopool.fee_rate)
@@ -271,27 +283,29 @@ impl Amm for WoofiSwap {
             }
         };
 
-        let mut quote_amount = quote_params.amount as u128;
-        if quote_params.input_mint != self.quote_mint {
-            let (_quote_amount, _) = swap_math::calc_quote_amount_sell_base(
+        let mut usdc_amount: u128 = 0;
+        if quote_params.input_mint == self.usdc_mint {
+            usdc_amount = quote_params.amount as u128;
+        } else {
+            let (_usdc_amount, _) = swap_math::calc_quote_amount_sell_base(
                 quote_params.amount as u128,
                 woopool_a.as_ref().context("Missing woopool")?,
                 decimals_a.as_ref().context("Missing decimals_a")?,
                 state_a.as_ref().context("Missing state_a")?,
             )?;
 
-            quote_amount = _quote_amount;
+            usdc_amount = _usdc_amount;
         }
 
-        let swap_fee = checked_mul_div_round_up(quote_amount, self.fee_rate as u128, ONE_E5_U128)?;
-        quote_amount = quote_amount
+        let swap_fee = checked_mul_div_round_up(usdc_amount, self.fee_rate as u128, ONE_E5_U128)?;
+        usdc_amount = usdc_amount
             .checked_sub(swap_fee)
             .ok_or(ErrorCode::MathOverflow)?;
 
-        let mut to_amount = quote_amount;
-        if quote_params.output_mint != self.quote_mint {
+        let mut to_amount = usdc_amount;
+        if quote_params.output_mint != self.usdc_mint {
             let (_to_amount, _) = swap_math::calc_base_amount_sell_quote(
-                quote_amount,
+                usdc_amount,
                 woopool_b.as_ref().context("Missing woopool")?,
                 decimals_b.as_ref().context("Missing decimals_a")?,
                 state_b.as_ref().context("Missing state_a")?,
@@ -304,16 +318,12 @@ impl Amm for WoofiSwap {
             in_amount: quote_params.amount.try_into()?,
             out_amount: to_amount as u64,
             fee_amount: swap_fee as u64,
-            fee_mint: self.quote_mint,
+            fee_mint: self.usdc_mint,
             ..Quote::default()
         })
     }
 
     fn get_swap_and_account_metas(&self, swap_params: &SwapParams) -> Result<SwapAndAccountMetas> {
-        let woopool_a = self.woopool_a.ok_or(ErrorCode::SwapPoolInvalid)?;
-        let woopool_b = self.woopool_b.ok_or(ErrorCode::SwapPoolInvalid)?;
-        let quote_vault = woopool_b.token_vault;
-
         let account_metas = vec![
             AccountMeta::new(self.wooconfig, false),
             AccountMeta::new_readonly(spl_token::ID, false),
@@ -321,16 +331,16 @@ impl Amm for WoofiSwap {
             AccountMeta::new(self.token_a_wooracle, false),
             AccountMeta::new(self.token_a_woopool, false),
             AccountMeta::new(swap_params.source_token_account, false),
-            AccountMeta::new(woopool_a.token_vault, false),
+            AccountMeta::new(self.token_a_vault, false),
             AccountMeta::new(self.token_a_price_update, false),
             AccountMeta::new(self.token_b_wooracle, false),
             AccountMeta::new(self.token_b_woopool, false),
             AccountMeta::new(swap_params.destination_token_account, false),
-            AccountMeta::new(woopool_b.token_vault, false),
+            AccountMeta::new(self.token_b_vault, false),
             AccountMeta::new(self.token_b_price_update, false),
-            AccountMeta::new(self.quote_pool, false),
-            AccountMeta::new(self.quote_price_update, false),
-            AccountMeta::new(quote_vault, false),
+            AccountMeta::new(self.usdc_woopool, false),
+            AccountMeta::new(self.usdc_price_update, false),
+            AccountMeta::new(self.usdc_vault, false),
             // TODO: confirm with Jupiter about the rebate address
             // AccountMeta::new(self.rebate_to, false),
         ];
