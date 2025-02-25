@@ -283,35 +283,37 @@ impl Amm for WoofiSwap {
             }
         };
 
-        let mut usdc_amount: u128 = 0;
-        if quote_params.input_mint == self.usdc_mint {
-            usdc_amount = quote_params.amount as u128;
-        } else {
-            let (_usdc_amount, _) = swap_math::calc_quote_amount_sell_base(
-                quote_params.amount as u128,
-                woopool_a.as_ref().context("Missing woopool")?,
-                decimals_a.as_ref().context("Missing decimals_a")?,
-                state_a.as_ref().context("Missing state_a")?,
-            )?;
+        let usdc_amount: u128 = 
+            if quote_params.input_mint == self.usdc_mint {
+                quote_params.amount as u128
+            } else {
+                let (_usdc_amount, _) = swap_math::calc_quote_amount_sell_base(
+                    quote_params.amount as u128,
+                    woopool_a.as_ref().context("Missing woopool")?,
+                    decimals_a.as_ref().context("Missing decimals_a")?,
+                    state_a.as_ref().context("Missing state_a")?,
+                )?;
 
-            usdc_amount = _usdc_amount;
-        }
+                _usdc_amount
+            };
 
         let swap_fee = checked_mul_div_round_up(usdc_amount, self.fee_rate as u128, ONE_E5_U128)?;
-        usdc_amount = usdc_amount
+        let usdc_amount_after_fee = usdc_amount
             .checked_sub(swap_fee)
             .ok_or(ErrorCode::MathOverflow)?;
 
-        let mut to_amount = usdc_amount;
-        if quote_params.output_mint != self.usdc_mint {
-            let (_to_amount, _) = swap_math::calc_base_amount_sell_quote(
-                usdc_amount,
-                woopool_b.as_ref().context("Missing woopool")?,
-                decimals_b.as_ref().context("Missing decimals_a")?,
-                state_b.as_ref().context("Missing state_a")?,
-            )?;
-            to_amount = _to_amount;
-        }
+        let to_amount: u128 = 
+            if quote_params.output_mint == self.usdc_mint {
+                usdc_amount_after_fee
+            } else {
+                let (_to_amount, _) = swap_math::calc_base_amount_sell_quote(
+                    usdc_amount_after_fee,
+                    woopool_b.as_ref().context("Missing woopool")?,
+                    decimals_b.as_ref().context("Missing decimals_a")?,
+                    state_b.as_ref().context("Missing state_a")?,
+                )?;
+                _to_amount
+            };
 
         Ok(Quote {
             fee_pct: self.fee_rate.into(),
