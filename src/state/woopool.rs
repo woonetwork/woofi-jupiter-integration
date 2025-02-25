@@ -36,7 +36,6 @@ use anchor_lang::prelude::{account, AnchorSerialize, AnchorDeserialize, borsh, P
 
 #[account]
 #[derive(InitSpace)]
-#[derive(Default, Copy)]
 pub struct WooPool {
     pub wooconfig: Pubkey,     // 32
     pub woopool_bump: [u8; 1], // 1
