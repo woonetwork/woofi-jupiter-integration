@@ -266,19 +266,19 @@ impl Amm for WoofiSwap {
                 (
                     self.decimals_a,
                     self.state_a,
-                    self.woopool_a,
+                    &self.woopool_a,
                     self.decimals_b,
                     self.state_b,
-                    self.woopool_b,
+                    &self.woopool_b,
                 )
             } else {
                 (
                     self.decimals_b,
                     self.state_b,
-                    self.woopool_b,
+                    &self.woopool_b,
                     self.decimals_a,
                     self.state_a,
-                    self.woopool_a,
+                    &self.woopool_a,
                 )
             }
         };
