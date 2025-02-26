@@ -55,6 +55,8 @@ pub struct WooAmmPool {
     pub quote_token_mint: Pubkey,
     pub quote_feed_account: Pubkey,
     pub quote_price_update: Pubkey,
+    pub quote_woopool: Pubkey,
+    pub quote_vault: Pubkey
 }
 
 impl WooAmmPool {
@@ -88,7 +90,9 @@ impl WooAmmPool {
         token_vault_b: Pubkey,
         quote_token_mint: Pubkey,
         quote_feed_account: Pubkey,
-        quote_price_update: Pubkey,    
+        quote_price_update: Pubkey,
+        quote_woopool: Pubkey,
+        quote_vault: Pubkey
     ) -> Result<()> {
         self.wooammpool_bump = [bump];
         self.wooconfig = wooconfig;
@@ -108,6 +112,8 @@ impl WooAmmPool {
         self.quote_token_mint = quote_token_mint;
         self.quote_feed_account = quote_feed_account;
         self.quote_price_update = quote_price_update;
+        self.quote_woopool = quote_woopool;
+        self.quote_vault = quote_vault;
 
         Ok(())
     }
