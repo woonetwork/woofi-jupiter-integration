@@ -31,33 +31,33 @@
 * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use anchor_lang::prelude::{account, AnchorSerialize, AnchorDeserialize, borsh, Pubkey, InitSpace};
-
+use anchor_lang::prelude::{account, borsh, AnchorDeserialize, AnchorSerialize, InitSpace, Pubkey};
+use anchor_lang::Discriminator;
 #[account]
 #[derive(InitSpace)]
 pub struct Wooracle {
-    pub wooconfig: Pubkey,    // 32
-    pub authority: Pubkey,    // 32
-    pub token_mint: Pubkey,   // 32
+    pub wooconfig: Pubkey,  // 32
+    pub authority: Pubkey,  // 32
+    pub token_mint: Pubkey, // 32
 
     // pyth feed account for BASE token
     pub feed_account: Pubkey, // 32
     // pyth price update account for BASE token
     pub price_update: Pubkey, // 32
     // pyth oracle maximum age, in seconds, 60 means 60s
-    pub maximum_age: u64,           // 8
+    pub maximum_age: u64, // 8
 
-    pub price_decimals: u8,         // 1
-    pub quote_decimals: u8,         // 1
-    pub base_decimals: u8,          // 1
-    pub updated_at: i64,            // 8
-    pub stale_duration: i64,        // 8
-    pub bound: u64,                 // 8
-    pub price: u128,                // 16 as chainlink oracle (e.g. decimal = 8)
-    pub coeff: u64,                 // 8 k: decimal = 18.    18.4 * 1e18
-    pub spread: u64,                // 8 s: decimal = 18.   spread <= 2e18   18.4 * 1e18
-    pub range_min: u128,            // 16
-    pub range_max: u128,            // 16
+    pub price_decimals: u8,  // 1
+    pub quote_decimals: u8,  // 1
+    pub base_decimals: u8,   // 1
+    pub updated_at: i64,     // 8
+    pub stale_duration: i64, // 8
+    pub bound: u64,          // 8
+    pub price: u128,         // 16 as chainlink oracle (e.g. decimal = 8)
+    pub coeff: u64,          // 8 k: decimal = 18.    18.4 * 1e18
+    pub spread: u64,         // 8 s: decimal = 18.   spread <= 2e18   18.4 * 1e18
+    pub range_min: u128,     // 16
+    pub range_max: u128,     // 16
 
     // quote token configs
     pub quote_token_mint: Pubkey,   // 32
