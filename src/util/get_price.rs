@@ -28,8 +28,8 @@ pub struct GetStateResult {
 pub fn get_price_impl<'info>(
     clock: &ClockRef,
     oracle: &Wooracle,
-    price_update: &mut PriceUpdateV2,
-    quote_price_update: &mut PriceUpdateV2,
+    price_update: &PriceUpdateV2,
+    quote_price_update: &PriceUpdateV2,
 ) -> Result<GetPriceResult> {
     let now = clock.unix_timestamp.load(Ordering::Relaxed);
 
@@ -53,11 +53,11 @@ pub fn get_price_impl<'info>(
 
     let base_price = pyth_result.price as u128;
     let quote_price = quote_price_result.price as u128;
-    let quote_decimal = quote_price_result.exponent.abs() as u32;
+    let quote_decimal = quote_price_result.exponent.unsigned_abs();
+
     let clo_price = base_price
         .checked_mul(10_u128.pow(quote_decimal))
-        .ok_or(ErrorCode::MathOverflow)?
-        .checked_div(quote_price)
+        .and_then(|v| v.checked_div(quote_price))
         .ok_or(ErrorCode::MathOverflow)?;
 
     let wo_price = oracle.price;
@@ -65,9 +65,21 @@ pub fn get_price_impl<'info>(
     let bound = oracle.bound as u128;
 
     let wo_feasible = clo_price != 0 && now <= (wo_timestamp + oracle.stale_duration);
-    let wo_price_in_bound = clo_price != 0
-        && ((clo_price * (ONE_E18_U128 - bound)) / ONE_E18_U128 <= wo_price
-            && wo_price <= (clo_price * (ONE_E18_U128 + bound)) / ONE_E18_U128);
+
+    // Safe math for price bound checks
+    let lower_bound = ONE_E18_U128
+        .checked_sub(bound)
+        .and_then(|v| clo_price.checked_mul(v))
+        .and_then(|v| v.checked_div(ONE_E18_U128))
+        .ok_or(ErrorCode::MathOverflow)?;
+
+    let upper_bound = ONE_E18_U128
+        .checked_add(bound)
+        .and_then(|v| clo_price.checked_mul(v))
+        .and_then(|v| v.checked_div(ONE_E18_U128))
+        .ok_or(ErrorCode::MathOverflow)?;
+
+    let wo_price_in_bound = clo_price != 0 && (lower_bound <= wo_price && wo_price <= upper_bound);
 
     let price_out: u128;
     let feasible_out: bool;
@@ -97,8 +109,8 @@ pub fn get_price_impl<'info>(
 pub fn get_state_impl<'info>(
     clock: &ClockRef,
     oracle: &Wooracle,
-    price_update: &mut PriceUpdateV2,
-    quote_price_update: &mut PriceUpdateV2,
+    price_update: &PriceUpdateV2,
+    quote_price_update: &PriceUpdateV2,
 ) -> Result<GetStateResult> {
     let price_result = get_price_impl(clock, oracle, price_update, quote_price_update)?;
     Ok(GetStateResult {

@@ -35,7 +35,7 @@ use anyhow::{Context, Result};
 
 use constants::ONE_E5_U128;
 use errors::ErrorCode;
-use solana_sdk::{clock::Clock, pubkey::Pubkey, sysvar};
+use solana_sdk::{pubkey::Pubkey, sysvar};
 use state::{WooPool, WooAmmPool, Wooracle};
 use std::{cmp::max, convert::TryInto};
 use util::{
