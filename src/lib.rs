@@ -35,7 +35,7 @@ use anyhow::{Context, Result};
 
 use constants::ONE_E5_U128;
 use errors::ErrorCode;
-use solana_sdk::{clock::Clock, pubkey::Pubkey, sysvar};
+use solana_sdk::{pubkey::Pubkey, sysvar};
 use state::{WooPool, WooAmmPool, Wooracle};
 use std::{cmp::max, convert::TryInto};
 use util::{
@@ -44,8 +44,7 @@ use util::{
 };
 
 use jupiter_amm_interface::{
-    try_get_account_data, AccountMap, Amm, AmmContext, KeyedAccount, Quote, QuoteParams,
-    SwapAndAccountMetas, SwapParams,
+    try_get_account_data, AccountMap, Amm, AmmContext, ClockRef, KeyedAccount, Quote, QuoteParams, SwapAndAccountMetas, SwapParams
 };
 
 use pyth_solana_receiver_sdk::price_update::PriceUpdateV2;
@@ -93,6 +92,7 @@ pub struct WoofiSwap {
     pub decimals_b: Option<Decimals>,
     pub state_b: Option<GetStateResult>,
     pub woopool_b: Option<WooPool>,
+    pub clock_ref: ClockRef,
 }
 
 impl Amm for WoofiSwap {
@@ -100,7 +100,7 @@ impl Amm for WoofiSwap {
         self.program_id
     }
 
-    fn from_keyed_account(keyed_account: &KeyedAccount, _amm_context: &AmmContext) -> Result<Self> {
+    fn from_keyed_account(keyed_account: &KeyedAccount, amm_context: &AmmContext) -> Result<Self> {
         let program_id = id();
 
         let woo_amm_pool = &WooAmmPool::try_deserialize(&mut keyed_account.account.data.as_slice())?;
@@ -155,6 +155,7 @@ impl Amm for WoofiSwap {
             decimals_b: None,
             state_b: None,
             woopool_b: None,
+            clock_ref: amm_context.clock_ref.clone(),       
         })
     }
 
@@ -209,12 +210,6 @@ impl Amm for WoofiSwap {
             &mut try_get_account_data(account_map, &self.usdc_price_update)?;
         let quote_price_update = &mut PriceUpdateV2::try_deserialize(quote_price_update_data)?;
 
-        let clock: Clock = match account_map.get(&sysvar::clock::ID) {
-            Some(account) => bincode::deserialize(&account.data)
-                .context("Failed to deserialize sysvar::clock::ID")?,
-            None => Clock::default(), // some amms don't have clock snapshot
-        };
-
         let fee_rate: u16 = if self.token_a_mint == self.usdc_mint {
             token_b_woopool.fee_rate
         } else if self.token_b_mint == self.usdc_mint {
@@ -230,7 +225,7 @@ impl Amm for WoofiSwap {
         );
 
         let state_a = get_price::get_state_impl(
-            &clock,
+            &self.clock_ref,
             token_a_wooracle,
             token_a_price_update,
             quote_price_update,
@@ -243,7 +238,7 @@ impl Amm for WoofiSwap {
         );
 
         let state_b = get_price::get_state_impl(
-            &clock,
+            &self.clock_ref,
             token_b_wooracle,
             token_b_price_update,
             quote_price_update,
