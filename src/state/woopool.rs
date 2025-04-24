@@ -32,7 +32,7 @@
 */
 
 use anchor_lang::prelude::{account, AnchorSerialize, AnchorDeserialize, borsh, Pubkey, InitSpace};
-
+use anchor_lang::Discriminator;
 
 #[account]
 #[derive(InitSpace)]

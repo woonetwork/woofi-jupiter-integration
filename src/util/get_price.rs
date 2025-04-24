@@ -1,6 +1,11 @@
+use std::sync::atomic::Ordering;
+
+use anchor_lang::{
+    prelude::{borsh, AnchorDeserialize, AnchorSerialize},
+    Key,
+};
 use anyhow::{Context, Result};
-use anchor_lang::{prelude::{borsh, AnchorDeserialize, AnchorSerialize}, Key};
-use solana_sdk::clock::Clock;
+use jupiter_amm_interface::ClockRef;
 
 use crate::{constants::*, errors::ErrorCode, state::wooracle::*};
 
@@ -21,40 +26,60 @@ pub struct GetStateResult {
 }
 
 pub fn get_price_impl<'info>(
-    clock: &Clock,
+    clock: &ClockRef,
     oracle: &Wooracle,
-    price_update: &mut PriceUpdateV2,
-    quote_price_update: &mut PriceUpdateV2,
+    price_update: &PriceUpdateV2,
+    quote_price_update: &PriceUpdateV2,
 ) -> Result<GetPriceResult> {
-    let now = clock.unix_timestamp;
+    let now = clock.unix_timestamp.load(Ordering::Relaxed);
 
-    let pyth_result = price_update.get_price_no_older_than(
-        clock,
-        oracle.maximum_age,
-        &oracle.feed_account.key().to_bytes(),
-    ).ok().context("pyth price update failed")?;
+    let pyth_result = price_update
+        .get_price_no_older_than(
+            now,
+            oracle.maximum_age,
+            &oracle.feed_account.key().to_bytes(),
+        )
+        .ok()
+        .context("pyth price update failed")?;
 
-    let quote_price_result = quote_price_update.get_price_no_older_than(
-        clock,
-        oracle.maximum_age,
-        &oracle.quote_feed_account.key().to_bytes(),
-    ).ok().context("pyth price update failed")?;
+    let quote_price_result = quote_price_update
+        .get_price_no_older_than(
+            now,
+            oracle.maximum_age,
+            &oracle.quote_feed_account.key().to_bytes(),
+        )
+        .ok()
+        .context("pyth price update failed")?;
 
     let base_price = pyth_result.price as u128;
     let quote_price = quote_price_result.price as u128;
-    let quote_decimal = quote_price_result.exponent.abs() as u32;
+    let quote_decimal = quote_price_result.exponent.unsigned_abs();
+
     let clo_price = base_price
-        .checked_mul(10_u128.pow(quote_decimal)).ok_or(ErrorCode::MathOverflow)?
-        .checked_div(quote_price).ok_or(ErrorCode::MathOverflow)?;
+        .checked_mul(10_u128.pow(quote_decimal))
+        .and_then(|v| v.checked_div(quote_price))
+        .ok_or(ErrorCode::MathOverflow)?;
 
     let wo_price = oracle.price;
     let wo_timestamp = oracle.updated_at;
     let bound = oracle.bound as u128;
 
     let wo_feasible = clo_price != 0 && now <= (wo_timestamp + oracle.stale_duration);
-    let wo_price_in_bound = clo_price != 0
-        && ((clo_price * (ONE_E18_U128 - bound)) / ONE_E18_U128 <= wo_price
-            && wo_price <= (clo_price * (ONE_E18_U128 + bound)) / ONE_E18_U128);
+
+    // Safe math for price bound checks
+    let lower_bound = ONE_E18_U128
+        .checked_sub(bound)
+        .and_then(|v| clo_price.checked_mul(v))
+        .and_then(|v| v.checked_div(ONE_E18_U128))
+        .ok_or(ErrorCode::MathOverflow)?;
+
+    let upper_bound = ONE_E18_U128
+        .checked_add(bound)
+        .and_then(|v| clo_price.checked_mul(v))
+        .and_then(|v| v.checked_div(ONE_E18_U128))
+        .ok_or(ErrorCode::MathOverflow)?;
+
+    let wo_price_in_bound = clo_price != 0 && (lower_bound <= wo_price && wo_price <= upper_bound);
 
     let price_out: u128;
     let feasible_out: bool;
@@ -82,10 +107,10 @@ pub fn get_price_impl<'info>(
 }
 
 pub fn get_state_impl<'info>(
-    clock: &Clock,
+    clock: &ClockRef,
     oracle: &Wooracle,
-    price_update: &mut PriceUpdateV2,
-    quote_price_update: &mut PriceUpdateV2,
+    price_update: &PriceUpdateV2,
+    quote_price_update: &PriceUpdateV2,
 ) -> Result<GetStateResult> {
     let price_result = get_price_impl(clock, oracle, price_update, quote_price_update)?;
     Ok(GetStateResult {
