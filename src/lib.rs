@@ -1,4 +1,5 @@
 use anchor_lang::{declare_id, prelude::AccountMeta, AccountDeserialize};
+use anchor_spl::token::spl_token::state::Account;
 /*
 
 ░██╗░░░░░░░██╗░█████╗░░█████╗░░░░░░░███████╗██╗
@@ -31,16 +32,15 @@ use anchor_lang::{declare_id, prelude::AccountMeta, AccountDeserialize};
 * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 
 use constants::ONE_E5_U128;
 use errors::ErrorCode;
-use solana_sdk::{pubkey::Pubkey, sysvar};
-use state::{WooPool, WooAmmPool, Wooracle};
+use solana_sdk::{program_pack::Pack, pubkey::Pubkey, sysvar};
+use state::{WooAmmPool, WooConfig, WooPool, Wooracle};
 use std::{cmp::max, convert::TryInto};
 use util::{
-    checked_mul_div_round_up, get_price,
-    swap_math, Decimals, GetStateResult,
+    balance, checked_mul_div_round_up, get_price, swap_math, Decimals, GetStateResult
 };
 
 use jupiter_amm_interface::{
@@ -86,12 +86,15 @@ pub struct WoofiSwap {
     pub usdc_vault: Pubkey,
 
     pub fee_rate: u16,
+    pub wooconfig_state: Option<WooConfig>,
     pub decimals_a: Option<Decimals>,
     pub state_a: Option<GetStateResult>,
     pub woopool_a: Option<WooPool>,
+    pub token_a_vault_amount: Option<u64>,
     pub decimals_b: Option<Decimals>,
     pub state_b: Option<GetStateResult>,
     pub woopool_b: Option<WooPool>,
+    pub token_b_vault_amount: Option<u64>,
     pub clock_ref: ClockRef,
 }
 
@@ -148,13 +151,16 @@ impl Amm for WoofiSwap {
             usdc_feed_account,
             usdc_woopool,
             usdc_vault,
+            wooconfig_state: None,
             fee_rate: 0,
             decimals_a: None,
             state_a: None,
             woopool_a: None,
+            token_a_vault_amount: None,
             decimals_b: None,
             state_b: None,
             woopool_b: None,
+            token_b_vault_amount: None,
             clock_ref: amm_context.clock_ref.clone(),       
         })
     }
@@ -173,18 +179,24 @@ impl Amm for WoofiSwap {
 
     fn get_accounts_to_update(&self) -> Vec<Pubkey> {
         vec![
+            self.wooconfig,
             self.token_a_wooracle,
             self.token_a_woopool,
             self.token_a_price_update,
+            self.token_a_vault,
             self.token_b_wooracle,
             self.token_b_woopool,
             self.token_b_price_update,
+            self.token_b_vault,
             sysvar::clock::ID,
         ]
     }
 
     fn update(&mut self, account_map: &AccountMap) -> Result<()> {
         println!("start update:");
+
+        let wooconfig_data = &mut try_get_account_data(account_map, &self.wooconfig)?;
+        let wooconfig = WooConfig::try_deserialize(wooconfig_data)?;
 
         let token_a_wooracle_data = &mut try_get_account_data(account_map, &self.token_a_wooracle)?;
         let token_a_wooracle = &Wooracle::try_deserialize(token_a_wooracle_data)?;
@@ -244,19 +256,42 @@ impl Amm for WoofiSwap {
             quote_price_update,
         )?;
 
+        let get_token_amount = |token_vault| {
+            try_get_account_data(account_map, token_vault)
+                .ok()
+                .and_then(|account_data| {
+                    Account::unpack(account_data).ok()
+                })
+                .and_then(|token_account| {
+                    if token_account.is_frozen() {
+                        None
+                    } else {
+                        Some(token_account.amount)
+                    }
+                })
+        };
+
+        self.wooconfig_state = Some(wooconfig);
         self.fee_rate = fee_rate;
         self.decimals_a = decimals_a;
         self.state_a = Some(state_a);
         self.woopool_a = Some(token_a_woopool);
+        self.token_a_vault_amount = get_token_amount(&self.token_a_vault);
         self.decimals_b = decimals_b;
         self.state_b = Some(state_b);
         self.woopool_b = Some(token_b_woopool);
+        self.token_b_vault_amount = get_token_amount(&self.token_b_vault);
 
         Ok(())
     }
 
     fn quote(&self, quote_params: &QuoteParams) -> Result<Quote> {
-        let (decimals_a, state_a, woopool_a, decimals_b, state_b, woopool_b) = {
+        let wooconfig = self.wooconfig_state.as_ref().context("Missing wooconfig")?;
+        if wooconfig.paused {
+            return Err(anyhow!("Woofi is paused"));
+        }
+
+        let (decimals_a, state_a, woopool_a, decimals_b, state_b, woopool_b, woopool_to_amount) = {
             if self.token_a_mint == quote_params.input_mint {
                 (
                     self.decimals_a,
@@ -265,6 +300,7 @@ impl Amm for WoofiSwap {
                     self.decimals_b,
                     self.state_b,
                     &self.woopool_b,
+                    balance(&self.woopool_b, self.token_b_vault_amount)
                 )
             } else {
                 (
@@ -274,6 +310,7 @@ impl Amm for WoofiSwap {
                     self.decimals_a,
                     self.state_a,
                     &self.woopool_a,
+                    balance(&self.woopool_a, self.token_a_vault_amount)
                 )
             }
         };
@@ -309,6 +346,10 @@ impl Amm for WoofiSwap {
                 )?;
                 _to_amount
             };
+            
+        if woopool_to_amount? < to_amount {
+            return Err(ErrorCode::NotEnoughOut.into());
+        }
 
         Ok(Quote {
             fee_pct: self.fee_rate.into(),
