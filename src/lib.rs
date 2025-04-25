@@ -89,12 +89,13 @@ pub struct WoofiSwap {
     pub wooconfig_state: Option<WooConfig>,
     pub decimals_a: Option<Decimals>,
     pub state_a: Option<GetStateResult>,
+    pub token_a_balance: Option<u128>,
     pub woopool_a: Option<WooPool>,
-    pub token_a_vault_amount: Option<u64>,
     pub decimals_b: Option<Decimals>,
     pub state_b: Option<GetStateResult>,
+    pub token_b_balance: Option<u128>,
     pub woopool_b: Option<WooPool>,
-    pub token_b_vault_amount: Option<u64>,
+    pub usdc_balance: Option<u128>,
     pub clock_ref: ClockRef,
 }
 
@@ -156,11 +157,12 @@ impl Amm for WoofiSwap {
             decimals_a: None,
             state_a: None,
             woopool_a: None,
-            token_a_vault_amount: None,
+            token_a_balance: None,
             decimals_b: None,
             state_b: None,
             woopool_b: None,
-            token_b_vault_amount: None,
+            token_b_balance: None,
+            usdc_balance: None,
             clock_ref: amm_context.clock_ref.clone(),       
         })
     }
@@ -188,6 +190,7 @@ impl Amm for WoofiSwap {
             self.token_b_woopool,
             self.token_b_price_update,
             self.token_b_vault,
+            self.usdc_vault,
             sysvar::clock::ID,
         ]
     }
@@ -217,6 +220,9 @@ impl Amm for WoofiSwap {
         let token_b_price_update_data =
             &mut try_get_account_data(account_map, &self.token_b_price_update)?;
         let token_b_price_update = &mut PriceUpdateV2::try_deserialize(token_b_price_update_data)?;
+
+        let usdc_woopool_data = &mut try_get_account_data(account_map, &self.usdc_woopool)?;
+        let usdc_woopool = WooPool::try_deserialize(usdc_woopool_data)?;
 
         let quote_price_update_data =
             &mut try_get_account_data(account_map, &self.usdc_price_update)?;
@@ -256,7 +262,7 @@ impl Amm for WoofiSwap {
             quote_price_update,
         )?;
 
-        let get_token_amount = |token_vault| {
+        let get_token_balance = |token_vault, woopool| {
             try_get_account_data(account_map, token_vault)
                 .ok()
                 .and_then(|account_data| {
@@ -266,7 +272,7 @@ impl Amm for WoofiSwap {
                     if token_account.is_frozen() {
                         None
                     } else {
-                        Some(token_account.amount)
+                        balance(woopool, token_account.amount as u128)
                     }
                 })
         };
@@ -275,12 +281,13 @@ impl Amm for WoofiSwap {
         self.fee_rate = fee_rate;
         self.decimals_a = decimals_a;
         self.state_a = Some(state_a);
-        self.woopool_a = Some(token_a_woopool);
-        self.token_a_vault_amount = get_token_amount(&self.token_a_vault);
+        self.woopool_a = Some(token_a_woopool.clone());
+        self.token_a_balance = get_token_balance(&self.token_a_vault, &token_a_woopool);
         self.decimals_b = decimals_b;
         self.state_b = Some(state_b);
-        self.woopool_b = Some(token_b_woopool);
-        self.token_b_vault_amount = get_token_amount(&self.token_b_vault);
+        self.woopool_b = Some(token_b_woopool.clone());
+        self.token_b_balance = get_token_balance(&self.token_b_vault, &token_b_woopool);
+        self.usdc_balance = get_token_balance(&self.usdc_vault, &usdc_woopool);
 
         Ok(())
     }
@@ -291,29 +298,46 @@ impl Amm for WoofiSwap {
             return Err(anyhow!("Woofi is paused"));
         }
 
-        let (decimals_a, state_a, woopool_a, decimals_b, state_b, woopool_b, woopool_to_amount) = {
+        let (decimals_a,
+            state_a,
+            woopool_a,
+            decimals_b,
+            state_b,
+            woopool_b,
+            token_from_balance,
+            token_to_balance,
+            usdc_balance
+        ) = {
             if self.token_a_mint == quote_params.input_mint {
                 (
-                    self.decimals_a,
-                    self.state_a,
-                    &self.woopool_a,
-                    self.decimals_b,
-                    self.state_b,
-                    &self.woopool_b,
-                    balance(&self.woopool_b, self.token_b_vault_amount)
+                    self.decimals_a.as_ref().context("Missing decimals_a")?,
+                    self.state_a.as_ref().context("Missing state_a")?,
+                    self.woopool_a.as_ref().context("Missing woopool_a")?,
+                    self.decimals_b.as_ref().context("Missing decimals_b")?,
+                    self.state_b.as_ref().context("Missing state_b")?,
+                    self.woopool_b.as_ref().context("Missing woopool_b")?,
+                    self.token_a_balance.context("Missing token_b_balance")?,
+                    self.token_b_balance.context("Missing token_b_balance")?,
+                    self.usdc_balance.context("Missing usdc_balance")?
                 )
             } else {
                 (
-                    self.decimals_b,
-                    self.state_b,
-                    &self.woopool_b,
-                    self.decimals_a,
-                    self.state_a,
-                    &self.woopool_a,
-                    balance(&self.woopool_a, self.token_a_vault_amount)
+                    self.decimals_b.as_ref().context("Missing decimals_b")?,
+                    self.state_b.as_ref().context("Missing state_b")?,
+                    self.woopool_b.as_ref().context("Missing woopool_b")?,
+                    self.decimals_a.as_ref().context("Missing decimals_a")?,
+                    self.state_a.as_ref().context("Missing state_a")?,
+                    self.woopool_a.as_ref().context("Missing woopool_a")?,
+                    self.token_b_balance.context("Missing token_b_balance")?,
+                    self.token_a_balance.context("Missing token_a_balance")?,
+                    self.usdc_balance.context("Missing usdc_balance")?
                 )
             }
         };
+
+        if token_from_balance + (quote_params.amount as u128) > woopool_a.cap_bal {
+            return Err(ErrorCode::BalanceCapExceeds.into());
+        }
 
         let usdc_amount: u128 = 
             if quote_params.input_mint == self.usdc_mint {
@@ -321,9 +345,9 @@ impl Amm for WoofiSwap {
             } else {
                 let (_usdc_amount, _) = swap_math::calc_quote_amount_sell_base(
                     quote_params.amount as u128,
-                    woopool_a.as_ref().context("Missing woopool")?,
-                    decimals_a.as_ref().context("Missing decimals_a")?,
-                    state_a.as_ref().context("Missing state_a")?,
+                    woopool_a,
+                    decimals_a,
+                    state_a,
                 )?;
 
                 _usdc_amount
@@ -334,20 +358,26 @@ impl Amm for WoofiSwap {
             .checked_sub(swap_fee)
             .ok_or(ErrorCode::MathOverflow)?;
 
+        if woopool_a.token_mint != woopool_a.quote_token_mint {
+            if usdc_balance < swap_fee {
+                return Err(ErrorCode::NotEnoughOut.into());
+            }
+        }
+
         let to_amount: u128 = 
             if quote_params.output_mint == self.usdc_mint {
                 usdc_amount_after_fee
             } else {
                 let (_to_amount, _) = swap_math::calc_base_amount_sell_quote(
                     usdc_amount_after_fee,
-                    woopool_b.as_ref().context("Missing woopool")?,
-                    decimals_b.as_ref().context("Missing decimals_a")?,
-                    state_b.as_ref().context("Missing state_a")?,
+                    woopool_b,
+                    decimals_b,
+                    state_b,
                 )?;
                 _to_amount
             };
-            
-        if woopool_to_amount? < to_amount {
+
+        if token_to_balance < to_amount {
             return Err(ErrorCode::NotEnoughOut.into());
         }
 
