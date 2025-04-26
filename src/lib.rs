@@ -278,16 +278,17 @@ impl Amm for WoofiSwap {
         };
 
         self.wooconfig_state = Some(wooconfig);
+        self.token_a_balance = get_token_balance(&self.token_a_vault, &token_a_woopool);
+        self.token_b_balance = get_token_balance(&self.token_b_vault, &token_b_woopool);
+        self.usdc_balance = get_token_balance(&self.usdc_vault, &usdc_woopool);
+
         self.fee_rate = fee_rate;
         self.decimals_a = decimals_a;
         self.state_a = Some(state_a);
-        self.woopool_a = Some(token_a_woopool.clone());
-        self.token_a_balance = get_token_balance(&self.token_a_vault, &token_a_woopool);
+        self.woopool_a = Some(token_a_woopool);
         self.decimals_b = decimals_b;
         self.state_b = Some(state_b);
-        self.woopool_b = Some(token_b_woopool.clone());
-        self.token_b_balance = get_token_balance(&self.token_b_vault, &token_b_woopool);
-        self.usdc_balance = get_token_balance(&self.usdc_vault, &usdc_woopool);
+        self.woopool_b = Some(token_b_woopool);
 
         Ok(())
     }

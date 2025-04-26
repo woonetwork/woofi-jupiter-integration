@@ -61,13 +61,13 @@ async fn test_jupiter_quote() -> Result<(), Error> {
     println!("result.fee_mint:{}", result.fee_mint);
 
     result = woofi_swap.quote(&QuoteParams {
-        amount: 200000000,
+        amount: 2000000000,
         input_mint: USDC,
         output_mint: SOL,
         swap_mode: SwapMode::ExactIn,
     })?;
 
-    println!("Getting quote for buying SOL using 200 USDC");
+    println!("Getting quote for buying SOL using 21000 USDC");
     println!("result.out_amount:{}", result.out_amount);
     println!("result.in_amount:{}", result.in_amount);
     println!("result.fee_amount:{}", result.fee_amount);
