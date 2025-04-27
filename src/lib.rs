@@ -38,7 +38,7 @@ use constants::ONE_E5_U128;
 use errors::ErrorCode;
 use solana_sdk::{program_pack::Pack, pubkey::Pubkey, sysvar};
 use state::{WooAmmPool, WooConfig, WooPool, Wooracle};
-use std::{cmp::max, convert::TryInto};
+use std::cmp::max;
 use util::{
     balance, checked_mul_div_round_up, get_price, swap_math, Decimals, GetStateResult
 };
@@ -299,12 +299,12 @@ impl Amm for WoofiSwap {
             return Err(anyhow!("Woofi is paused"));
         }
 
-        let (decimals_a,
-            state_a,
-            woopool_a,
-            decimals_b,
-            state_b,
-            woopool_b,
+        let (decimals_from,
+            state_from,
+            woopool_from,
+            decimals_to,
+            state_to,
+            woopool_to,
             token_from_balance,
             token_to_balance,
             usdc_balance
@@ -336,19 +336,33 @@ impl Amm for WoofiSwap {
             }
         };
 
-        if token_from_balance + (quote_params.amount as u128) > woopool_a.cap_bal {
+        let in_amount = quote_params.amount as u128;
+
+        if in_amount <= woopool_from.min_swap_amount {
+            return
+                Ok(Quote {
+                    fee_pct: self.fee_rate.into(),
+                    in_amount: in_amount as u64,
+                    out_amount: 0,
+                    fee_amount: 0,
+                    fee_mint: self.usdc_mint,
+                    ..Quote::default()
+                });
+        }
+
+        if token_from_balance + in_amount > woopool_from.cap_bal {
             return Err(ErrorCode::BalanceCapExceeds.into());
         }
 
         let usdc_amount: u128 = 
             if quote_params.input_mint == self.usdc_mint {
-                quote_params.amount as u128
+                in_amount
             } else {
                 let (_usdc_amount, _) = swap_math::calc_quote_amount_sell_base(
-                    quote_params.amount as u128,
-                    woopool_a,
-                    decimals_a,
-                    state_a,
+                    in_amount,
+                    woopool_from,
+                    decimals_from,
+                    state_from,
                 )?;
 
                 _usdc_amount
@@ -359,10 +373,18 @@ impl Amm for WoofiSwap {
             .checked_sub(swap_fee)
             .ok_or(ErrorCode::MathOverflow)?;
 
-        if woopool_a.token_mint != woopool_a.quote_token_mint {
-            if usdc_balance < swap_fee {
-                return Err(ErrorCode::NotEnoughOut.into());
+        let check_usdc_amount = 
+            // sell base
+            if woopool_to.token_mint == self.usdc_mint {
+                usdc_amount
             }
+            // sell quote/ base to base 
+            else {
+                swap_fee
+            };
+
+        if usdc_balance < check_usdc_amount {
+            return Err(ErrorCode::NotEnoughOut.into());
         }
 
         let to_amount: u128 = 
@@ -371,9 +393,9 @@ impl Amm for WoofiSwap {
             } else {
                 let (_to_amount, _) = swap_math::calc_base_amount_sell_quote(
                     usdc_amount_after_fee,
-                    woopool_b,
-                    decimals_b,
-                    state_b,
+                    woopool_to,
+                    decimals_to,
+                    state_to,
                 )?;
                 _to_amount
             };
@@ -384,7 +406,7 @@ impl Amm for WoofiSwap {
 
         Ok(Quote {
             fee_pct: self.fee_rate.into(),
-            in_amount: quote_params.amount.try_into()?,
+            in_amount: in_amount as u64,
             out_amount: to_amount as u64,
             fee_amount: swap_fee as u64,
             fee_mint: self.usdc_mint,
