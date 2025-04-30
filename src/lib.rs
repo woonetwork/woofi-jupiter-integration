@@ -350,7 +350,8 @@ impl Amm for WoofiSwap {
                 });
         }
 
-        if token_from_balance + in_amount > woopool_from.cap_bal {
+        let woopool_from_after = token_from_balance.checked_add(in_amount).context("computation overflow")?;
+        if  woopool_from_after > woopool_from.cap_bal {
             return Err(ErrorCode::BalanceCapExceeds.into());
         }
 
